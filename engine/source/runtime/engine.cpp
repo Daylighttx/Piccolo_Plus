@@ -67,14 +67,22 @@ namespace Piccolo
 
     bool PiccoloEngine::tickOneFrame(float delta_time)
     {
+        using namespace std::chrono;
+
+        steady_clock::time_point logic_begin = steady_clock::now();
         logicalTick(delta_time);
+        steady_clock::time_point logic_end = steady_clock::now();
+        LOG_INFO("logicTime: {} ms", duration<float, std::milli>(logic_end - logic_begin).count());
         calculateFPS(delta_time);
 
         // single thread
         // exchange data between logic and render contexts
         g_runtime_global_context.m_render_system->swapLogicRenderData();
 
+        steady_clock::time_point render_begin = steady_clock::now();
         rendererTick(delta_time);
+        steady_clock::time_point render_end = steady_clock::now();
+        LOG_INFO("renderTime: {} ms", duration<float, std::milli>(render_end - render_begin).count());
 
 #ifdef ENABLE_PHYSICS_DEBUG_RENDERER
         g_runtime_global_context.m_physics_manager->renderPhysicsWorld(delta_time);
