@@ -25,6 +25,12 @@ namespace Piccolo
         std::shared_ptr<AssetManager> asset_manager = g_runtime_global_context.m_asset_manager;
         ASSERT(asset_manager);
 
+        if (file.empty())
+        {
+            LOG_WARN("loadTextureHDR: empty file path, skipping (optional texture not set)");
+            return nullptr;
+        }
+
         std::shared_ptr<TextureData> texture = std::make_shared<TextureData>();
 
         int iw, ih, n;
@@ -32,7 +38,10 @@ namespace Piccolo
             stbi_loadf(asset_manager->getFullPath(file).generic_string().c_str(), &iw, &ih, &n, desired_channels);
 
         if (!texture->m_pixels)
+        {
+            LOG_ERROR("loadTextureHDR failed: cannot load texture '{}' (file missing or invalid HDR)", file);
             return nullptr;
+        }
 
         texture->m_width  = iw;
         texture->m_height = ih;
@@ -62,13 +71,22 @@ namespace Piccolo
         std::shared_ptr<AssetManager> asset_manager = g_runtime_global_context.m_asset_manager;
         ASSERT(asset_manager);
 
+        if (file.empty())
+        {
+            LOG_WARN("loadTexture: empty file path, skipping (optional texture not set)");
+            return nullptr;
+        }
+
         std::shared_ptr<TextureData> texture = std::make_shared<TextureData>();
 
         int iw, ih, n;
         texture->m_pixels = stbi_load(asset_manager->getFullPath(file).generic_string().c_str(), &iw, &ih, &n, 4);
 
         if (!texture->m_pixels)
+        {
+            LOG_ERROR("loadTexture failed: cannot load texture '{}' (file missing or invalid image)", file);
             return nullptr;
+        }
 
         texture->m_width        = iw;
         texture->m_height       = ih;

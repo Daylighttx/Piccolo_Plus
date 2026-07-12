@@ -663,9 +663,12 @@ namespace Piccolo
         }
 
         // create m_vulkan_context._instance
-        if (vkCreateInstance(&instance_create_info, nullptr, &m_instance) != VK_SUCCESS)
+        VkResult instance_result = vkCreateInstance(&instance_create_info, nullptr, &m_instance);
+        if (instance_result != VK_SUCCESS)
         {
-            LOG_ERROR("vk create instance");
+            LOG_FATAL("vkCreateInstance failed with VkResult={}. "
+                      "No Vulkan device/driver available? Install the Vulkan Runtime or update your GPU driver.",
+                      static_cast<int>(instance_result));
         }
     }
 
@@ -701,10 +704,15 @@ namespace Piccolo
     void VulkanRHI::initializePhysicalDevice()
     {
         uint32_t physical_device_count;
-        vkEnumeratePhysicalDevices(m_instance, &physical_device_count, nullptr);
+        VkResult enum_result = vkEnumeratePhysicalDevices(m_instance, &physical_device_count, nullptr);
+        if (enum_result != VK_SUCCESS)
+        {
+            LOG_FATAL("vkEnumeratePhysicalDevices failed with VkResult={}", static_cast<int>(enum_result));
+        }
         if (physical_device_count == 0)
         {
-            LOG_ERROR("enumerate physical devices failed!");
+            LOG_FATAL("enumerate physical devices failed: 0 devices found. "
+                      "No Vulkan-capable GPU/driver on this machine.");
         }
         else
         {
@@ -749,7 +757,7 @@ namespace Piccolo
 
             if (m_physical_device == VK_NULL_HANDLE)
             {
-                LOG_ERROR("failed to find suitable physical device");
+                LOG_FATAL("failed to find suitable physical device (none matched isDeviceSuitable).");
             }
         }
     }
@@ -806,7 +814,7 @@ namespace Piccolo
 
         if (vkCreateDevice(m_physical_device, &device_create_info, nullptr, &m_device) != VK_SUCCESS)
         {
-            LOG_ERROR("vk create device");
+            LOG_FATAL("vkCreateDevice failed. Physical device handle invalid or driver error.");
         }
 
         // initialize queues of this device
