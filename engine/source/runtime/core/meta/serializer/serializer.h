@@ -6,6 +6,8 @@
 
 namespace Piccolo
 {
+    // serializer.h：对象 <-> JSON 的序列化中枢。基础类型(int/float/string/...)在此直接特化；
+    // 自定义反射类通过 Reflection::TypeMeta::writeByName / newFromNameAndJson 自动(反)序列化，编辑器与 Lua 绑定共用。
     template<typename...>
     inline constexpr bool always_false = false;
 
