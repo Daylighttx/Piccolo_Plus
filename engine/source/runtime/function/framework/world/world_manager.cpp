@@ -11,6 +11,8 @@
 
 #include "_generated/serializer/all_serializer.h"
 
+// WorldManager：世界/关卡管理器。持有已加载的 Level 集合，每帧 tick 驱动当前激活 Level 的更新，
+// 并负责 World 资源与 Level 的加载、重载、保存（编辑器热重载关卡即走这里）。
 namespace Piccolo
 {
     WorldManager::~WorldManager() { clear(); }

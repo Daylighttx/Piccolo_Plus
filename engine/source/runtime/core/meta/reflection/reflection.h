@@ -9,6 +9,8 @@
 
 namespace Piccolo
 {
+    // reflection.h：Piccolo 反射系统的核心 API。META/CLASS/STRUCT 宏在代码生成阶段(__REFLECTION_PARSER__)
+    // 记录类的字段与方法，运行时即可按名构造/序列化(JSON)/读写字段，从而自动生成编辑器面板并绑定 Lua。
 
 #if defined(__REFLECTION_PARSER__)
 #define META(...) __attribute__((annotate(#__VA_ARGS__)))

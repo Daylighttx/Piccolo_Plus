@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 920" width="100%" role="img">
+  <title>Piccolo 引擎架构与一帧生命周期</title>
+  <desc>阶段一总览：分层架构（editor/function/core/resource/platform/3rdparty）与一帧 tick 的数据流。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <text x="340" y="28" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="500" fill="#2C2C2A">Piccolo 引擎分层架构</text>
+
+  <rect x="40" y="44" width="600" height="420" rx="24" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+
+  <rect x="64" y="64" width="552" height="44" rx="10" fill="#D3D1C7" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="80" y="91" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A">editor</text>
+  <text x="170" y="91" font-family="sans-serif" font-size="12" fill="#5F5E5A">PiccoloEditor · ImGui · 反射自动生成属性面板</text>
+
+  <rect x="64" y="116" width="552" height="110" rx="10" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="80" y="142" font-family="sans-serif" font-size="14" font-weight="500" fill="#042C53">function</text>
+  <text x="170" y="142" font-family="sans-serif" font-size="12" fill="#0C447C">framework(ECS) · render · physics · animation · character</text>
+  <text x="170" y="162" font-family="sans-serif" font-size="12" fill="#0C447C">controller · input · particle · ui · global</text>
+  <text x="170" y="186" font-family="sans-serif" font-size="12" fill="#185FA5">render 为学习重点（延迟渲染管线）</text>
+
+  <rect x="64" y="234" width="552" height="60" rx="10" fill="#D3D1C7" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="80" y="260" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A">core</text>
+  <text x="170" y="260" font-family="sans-serif" font-size="12" fill="#5F5E5A">math(向量/矩阵/四元数) · color · log</text>
+  <text x="170" y="280" font-family="sans-serif" font-size="12" fill="#5F5E5A">meta(反射 + 序列化 + json) — 引擎灵魂</text>
+
+  <rect x="64" y="302" width="552" height="44" rx="10" fill="#D3D1C7" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="80" y="329" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A">resource</text>
+  <text x="170" y="329" font-family="sans-serif" font-size="12" fill="#5F5E5A">asset_manager(加载/缓存) · config_manager · res_type</text>
+
+  <rect x="64" y="354" width="552" height="40" rx="10" fill="#D3D1C7" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="80" y="379" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A">platform</text>
+  <text x="170" y="379" font-family="sans-serif" font-size="12" fill="#5F5E5A">file_service · path</text>
+
+  <rect x="64" y="402" width="552" height="44" rx="10" fill="#D3D1C7" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="80" y="428" font-family="sans-serif" font-size="14" font-weight="500" fill="#2C2C2A">3rdparty</text>
+  <text x="170" y="428" font-family="sans-serif" font-size="12" fill="#5F5E5A">VulkanSDK · JoltPhysics · glfw · imgui · lua · sol2 · spdlog · stb · VMA</text>
+
+  <text x="340" y="496" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="500" fill="#2C2C2A">一帧的生命周期 (engine.tickOneFrame)</text>
+
+  <rect x="130" y="516" width="420" height="48" rx="10" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="340" y="540" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="500" fill="#042C53">engine.tickOneFrame</text>
+  <path d="M340 564 L340 590" stroke="#185FA5" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <rect x="130" y="590" width="420" height="66" rx="10" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="340" y="614" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="500" fill="#042C53">logicalTick</text>
+  <text x="340" y="636" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#185FA5">input → world.tick → 各 component system</text>
+  <path d="M340 656 L340 682" stroke="#185FA5" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <rect x="130" y="682" width="420" height="50" rx="10" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="340" y="703" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="500" fill="#042C53">swapLogicRenderData</text>
+  <text x="340" y="722" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#185FA5">逻辑↔渲染 唯一数据交接点</text>
+  <path d="M340 732 L340 756" stroke="#185FA5" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <rect x="130" y="756" width="420" height="66" rx="10" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="340" y="780" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="500" fill="#042C53">rendererTick</text>
+  <text x="340" y="802" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#185FA5">render_system → render_pipeline → 屏幕</text>
+  <path d="M340 822 L340 838" stroke="#185FA5" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <rect x="130" y="838" width="420" height="56" rx="10" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="340" y="862" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="500" fill="#042C53">pollEvents + editor UI</text>
+  <text x="340" y="882" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#185FA5">ImGui 用反射自动生成面板</text>
+
+  <path d="M110 866 C 80 866 80 540 110 540" fill="none" stroke="#185FA5" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <text x="94" y="706" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#185FA5">每帧循环</text>
+</svg>

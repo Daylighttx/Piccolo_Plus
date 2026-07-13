@@ -19,6 +19,8 @@
 #include "runtime/function/render/render_system.h"
 #include "runtime/function/render/window_system.h"
 
+// RuntimeGlobalContext：引擎的"系统装配中心"。startSystems 按固定顺序创建并初始化所有大系统
+// （配置/文件/日志/资源/物理/世界/窗口/输入/粒子/渲染/调试绘制），是各模块互相取入口的全局总表。
 namespace Piccolo
 {
     RuntimeGlobalContext g_runtime_global_context;
