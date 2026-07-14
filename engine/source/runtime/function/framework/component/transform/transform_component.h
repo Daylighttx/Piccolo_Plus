@@ -41,6 +41,14 @@ namespace Piccolo
         META(Enable)
         Transform m_transform;
 
+        // === 阶段二 2.1 反射实验字段 ===
+        // 加一行 META(Enable) 就能让反射系统认识这个字段：
+        // 跑一次 PiccoloParser 后，会自动生成 get_m_world_matrix/set_m_world_matrix
+        // 并 REGISTER_FIELD_TO_MAP 到 TransformComponent 的 TypeMeta 表里。
+        // reflection.h 一个字都不用改。
+        META(Enable)
+        Matrix4x4_ m_world_matrix;
+
         Transform m_transform_buffer[2];
         size_t    m_current_index {0};
         size_t    m_next_index {1};
