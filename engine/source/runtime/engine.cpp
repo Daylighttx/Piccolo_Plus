@@ -72,7 +72,9 @@ namespace Piccolo
         steady_clock::time_point logic_begin = steady_clock::now();
         logicalTick(delta_time);
         steady_clock::time_point logic_end = steady_clock::now();
-        LOG_INFO("logicTime: {} ms", duration<float, std::milli>(logic_end - logic_begin).count());
+
+        float logic_ms = duration<float, std::milli>(logic_end - logic_begin).count();
+
         calculateFPS(delta_time);
 
         // single thread
@@ -82,7 +84,26 @@ namespace Piccolo
         steady_clock::time_point render_begin = steady_clock::now();
         rendererTick(delta_time);
         steady_clock::time_point render_end = steady_clock::now();
-        LOG_INFO("renderTime: {} ms", duration<float, std::milli>(render_end - render_begin).count());
+
+        float render_ms = duration<float, std::milli>(render_end - render_begin).count();
+
+        // --- sliding-window average via ring buffer ---
+        // drop the value about to be overwritten (oldest once full), insert new, advance pointer
+        m_logic_ms_sum  -= m_logic_ms_buf[m_avg_index];
+        m_render_ms_sum -= m_render_ms_buf[m_avg_index];
+
+        m_logic_ms_buf[m_avg_index]  = logic_ms;
+        m_render_ms_buf[m_avg_index] = render_ms;
+
+        m_logic_ms_sum  += logic_ms;
+        m_render_ms_sum += render_ms;
+
+        m_avg_index = (m_avg_index + 1) % s_avg_window;
+        if (m_avg_count < s_avg_window) ++m_avg_count;
+
+        LOG_INFO("logic ms avg: {:.3f}, render ms avg: {:.3f}",
+                 m_logic_ms_sum / m_avg_count, m_render_ms_sum / m_avg_count);
+
 
 #ifdef ENABLE_PHYSICS_DEBUG_RENDERER
         g_runtime_global_context.m_physics_manager->renderPhysicsWorld(delta_time);

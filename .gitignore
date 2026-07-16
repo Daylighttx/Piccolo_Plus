@@ -430,3 +430,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# === local-only additions ===
+# Mac deploy script (not needed on Windows)
+deploy_editor.sh
+# WorkBuddy sandbox memory
+.workbuddy/

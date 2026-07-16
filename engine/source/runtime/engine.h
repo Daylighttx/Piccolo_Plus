@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -49,6 +50,13 @@ namespace Piccolo
         float m_average_duration {0.f};
         int   m_frame_count {0};
         int   m_fps {0};
+        static constexpr int            s_avg_window {120}; // sliding-window size
+        std::array<float, s_avg_window>  m_logic_ms_buf  {};  // ring buffer of recent frame costs
+        std::array<float, s_avg_window>  m_render_ms_buf {};
+        float                           m_logic_ms_sum  {0.f}; // running sum over the window
+        float                           m_render_ms_sum {0.f};
+        int                             m_avg_index {0};       // write pointer, cycles 0..s_avg_window-1
+        int                             m_avg_count {0};       // valid samples so far (warm-up guard)
     };
 
 } // namespace Piccolo
