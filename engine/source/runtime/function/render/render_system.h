@@ -77,5 +77,6 @@ namespace Piccolo
         std::shared_ptr<RenderPipelineBase> m_render_pipeline;
 
         void processSwapData();
+        void updateLights();   // 阶段二 2.2：把 LightComponent 收集进渲染场景
     };
 } // namespace Piccolo

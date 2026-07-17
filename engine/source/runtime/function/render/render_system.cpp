@@ -15,6 +15,10 @@
 #include "runtime/function/global/global_context.h"
 #include "runtime/function/render/debugdraw/debug_draw_manager.h"
 
+#include "runtime/function/framework/component/light/light_component.h"
+#include "runtime/function/framework/component/transform/transform_component.h"
+#include "runtime/function/render/light.h"
+
 #include "runtime/function/render/passes/main_camera_pass.h"
 #include "runtime/function/render/passes/particle_pass.h"
 
@@ -105,6 +109,9 @@ namespace Piccolo
         // update per-frame buffer
         m_render_resource->updatePerFrameBuffer(m_render_scene, m_render_camera);
 
+        // === 阶段二 2.2：把挂在对象上的 LightComponent 收集进渲染场景 ===
+        updateLights();
+
         // update per-frame visible objects
         m_render_scene->updateVisibleObjects(std::static_pointer_cast<RenderResource>(m_render_resource),
                                              m_render_camera);
@@ -126,6 +133,34 @@ namespace Piccolo
         else
         {
             LOG_ERROR(__FUNCTION__, "unsupported render pipeline type");
+        }
+    }
+
+    void RenderSystem::updateLights()
+    {
+        if (!m_render_scene)
+            return;
+
+        // 点光源列表原本从不被清空，这里每帧重建（点光源 pass 已在消费它）
+        m_render_scene->m_point_light_list.m_lights.clear();
+
+        for (auto* lc : LightComponent::getAllLights())
+        {
+            if (lc->getLightType() == 0) // Point
+            {
+                PointLight pl;
+                pl.m_position = lc->getWorldPosition();
+                pl.m_flux     = lc->getColor() * lc->getIntensity();
+                m_render_scene->m_point_light_list.m_lights.push_back(pl);
+            }
+            else // Directional：覆盖全局方向光
+            {
+                m_render_scene->m_directional_light.m_color = lc->getColor() * lc->getIntensity();
+                Vector3 dir = lc->getWorldPosition();
+                // 避免零向量归一化（灯放在原点时方向保持默认）
+                if (dir.x != 0.f || dir.y != 0.f || dir.z != 0.f)
+                    m_render_scene->m_directional_light.m_direction = dir.normalisedCopy();
+            }
         }
     }
 

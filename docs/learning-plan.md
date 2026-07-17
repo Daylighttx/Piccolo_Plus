@@ -148,19 +148,22 @@ Piccolo 用 **JoltPhysics**（开源刚体物理引擎，与 PhysX / Havok 同�
 
 ## 3. 阶段三：综合改造与优化（跨模块，推 GitHub）
 
+> 前置：阶段二 2.1–2.10 已读完，理解各模块数据流。
+> 这些改造是阶段四（渲染管线现代化）的**直接前置**，建议按序号顺序推进。
+
 把前面学到的东西用起来，做能「看到效果 / 用数据证明」的改造。每个改动直接提交到 main、推送。
 
 **渲染相关（你最熟，先上手）**
-- [ ] 方向光阴影 Shadow Map（加 shadow pass）
-- [ ] 抗锯齿升级 FXAA → SMAA / TAA
-- [ ] 视锥剔除（减少 draw call，配合统计 HUD 看数字）
+- [ ] 方向光阴影 Shadow Map（加 shadow pass）→ 为 4.1 VSM 打基础
+- [ ] 抗锯齿升级 FXAA → SMAA / TAA → 为 6.2 AI 渲染的 TAA 打基础
+- [ ] 视锥剔除（减少 draw call，配合统计 HUD 看数字）→ 为 4.4 GPU-Driven 打基础
 - [ ] 后处理合并（tone_mapping + color_grading + fxaa 合一，省带宽）
-- [ ] SSAO / Bloom（扩战后处理）
+- [ ] SSAO / Bloom（扩战后处理）→ 为 4.6 DDGI 的 GI 概念打基础
 
 **物理相关（补盲 + 实用）**
-- [ ] 碰撞体调试可视化（debugdraw 画线框）
-- [ ] 碰撞事件系统（触发音效 / 逻辑）
-- [ ] 物理性能剖析（刚体数 vs 耗时）
+- [ ] 碰撞体调试可视化（debugdraw 画线框）→ 为 5.3 碰撞事件打基础
+- [ ] 碰撞事件系统（触发音效 / 逻辑）→ 对应 5.3
+- [ ] 物理性能剖析（刚体数 vs 耗时）→ 为 5.2 ECS 改造提供基准
 
 **跨模块**
 - [ ] 用反射给所有组件加统一调试面板
@@ -168,8 +171,286 @@ Piccolo 用 **JoltPhysics**（开源刚体物理引擎，与 PhysX / Havok 同�
 
 ---
 
-## 4. 推荐节奏
+## 4. 阶段四：渲染管线现代化（进阶渲染）
+
+> 前置：阶段三「方向光阴影 Shadow Map」「视锥剔除」已完成，理解 pass-based 延迟渲染管线。
+> 本章按**依赖链顺序**推进：Frame Graph 是基础设施 → 在它之上构建 GPU-Driven → 再叠 Visibility Buffer → 最后加 GI。VSM 和体渲染不依赖 Frame Graph，可先行。
+
+### 4.1 Virtual Shadow Maps — 虚拟阴影贴图
+
+**读什么**
+- `function/render/passes/directional_light_pass.{h,cpp}`（现有 CSM 级联阴影实现）
+- `function/render/render_resource.{h,cpp}`（RT 资源分配、depth texture 管理）
+- UE5 VSM 文档：虚拟纹理分页管理、Page-In 机制、Clipmap 方向光
+
+**关键概念**
+- 虚拟分辨率 16K×16K，分 128×128 Page 管理；物理显存只分配固定大小按需 Page-In
+- 从 G-Buffer 提取屏幕像素世界位置 → 投影到光源视角 → 标记需要的虚拟 Page
+- 只渲染被标记的 Page；未变化的 Page 复用上一帧（深度缓存机制）
+- 方向光用 Clipmap：每级覆盖半径翻倍，分辨率不变
+
+**动手实践**：把 CSM 升级为简化版 VSM
+- 不必一步到位 16K。先用 4K 虚拟分辨率 + 64×64 Page，验证 Page 标记 → 按需渲染流程
+- 对比 CSM 的阴影质量（近处物体边缘锯齿改善）
+- 进阶：加 Page 深度缓存（物体未移动时跳过光栅化），用帧耗时对比收益
+
+**实测参考（团结引擎 Tower Valley）**：VSM GPU 2.33ms vs CSM+VG 18.16ms，且覆盖更远。
+
+---
+
+### 4.2 体渲染 — 大气散射 + 体积雾
+
+**读什么**
+- `function/render/passes/`（看现有 pass 列表，找到插入点）
+- `function/render/render_pipeline.{h,cpp}`（pass 注册和执行顺序）
+- Frostbite 论文："A Scalable and Production Ready Sky and Atmosphere Rendering" + "Physically-based & Unified Volumetric Rendering"
+
+**关键概念**
+- 大气散射：低成本实现真实天空和远距离雾（Rayleigh + Mie 散射）
+- 体积雾：Frustum-aligned 3D 网格，逐体素计算雾照明，时域累积
+- 体积光照：将太阳级联光注入体积系统，产生 God Rays 效果
+
+**动手实践**：加一个体积雾 Pass
+- 新建 `volumetric_fog_pass`，在 GBuffer 之后、光照之前执行
+- 实现 Frustum-aligned 3D 网格（如 64×64×32），逐体素计算雾密度 × 光照
+- 时域累积：上一帧结果重投影，减少噪声
+- 验证：场景中出现体积雾和 God Rays 效果
+
+---
+
+### 4.3 Frame Graph — 声明式渲染管线
+
+> 这是后续 GPU-Driven / VisBuffer / DDGI 的**基础设施**，优先级最高。
+
+**读什么**
+- `function/render/render_pipeline_base.{h,cpp}`（现有硬编码 pass 序列）
+- `function/render/render_pass_base.{h,cpp}`（pass 基类、RT 资源声明）
+- Frostbite GDC 2017："FrameGraph: Extensible Rendering Architecture"
+- UE5 RDG 文档：Rendering Dependency Graph
+
+**关键概念**
+- 每帧渲染抽象为**有向无环图（DAG）**，节点 = Pass，边 = 资源依赖
+- 编译期：拓扑排序 → 资源活跃区间 → 自动内存别名 → 自动屏障
+- 执行期：按排序结果执行各 Pass lambda，自动创建/释放临时资源
+
+**动手实践**：实现 FrameGraphBuilder + 迁移一个 Pass
+- Phase 1：定义 `FrameGraphBuilder` 接口（`createTexture` / `createBuffer` / `addPass`）
+- Phase 2：实现拓扑排序 + 资源活跃区间计算
+- Phase 3：实现内存别名复用 + 自动屏障插入
+- Phase 4：把现有 `directional_light_pass` 迁移到 FrameGraph 声明式 API
+- 验证：新增 pass 只需 ~5 行声明（替代原来 ~60 行手动 RT 管理）；显存占用下降
+
+**实测参考**：显存降 24%、Vulkan 分配数减少 98%（2341→47）、同步屏障 bug 归零。
+
+---
+
+### 4.4 GPU-Driven Rendering Pipeline — GPU 驱动渲染
+
+> 前置：4.3 Frame Graph 已完成
+
+**读什么**
+- `function/render/render_scene.{h,cpp}`（CPU 端如何组织可见物体、提交 draw call）
+- `function/render/render_entity.{h,cpp}`（实体 → mesh → draw call 的链路）
+- Ubisoft《刺客信条》GPU-Driven 实践；UE5 Nanite 深度解析
+
+**关键概念**
+- 从 `DrawPrimitive`（CPU 逐物体组织）到 `DrawScene`（GPU 一次提交全部）
+- Compute Shader 在 GPU 端完成：视锥剔除 → HZB 遮挡剔除 → LOD 选择
+- Indirect Draw：GPU 生成 draw call 参数表，CPU 只提交一次
+
+**动手实践**：GPU 端视锥剔除 + Indirect Draw
+- 用 Compute Shader 在 GPU 端做视锥剔除（替代 CPU 遍历）
+- 生成 indirect draw 参数 buffer，用 `vkCmdDrawIndirect` 一次调用渲染全部
+- 对比：CPU 端帧耗时下降、draw call 数量变化
+- 进阶：加 HZB 遮挡剔除
+
+---
+
+### 4.5 Visibility Buffer — 可见性缓冲渲染
+
+> 前置：4.4 GPU-Driven 已完成
+
+**读什么**
+- `function/render/passes/main_camera_pass.{h,cpp}`（现有 G-Buffer 填充逻辑）
+- Wolfgang Engel Visibility Buffer 论文；Nanite Visibility Buffer 详解
+
+**关键概念**
+- 两阶段渲染：先只记录「谁可见」，再对着色
+- Pass 1：硬件光栅化大三角形 + 软件光栅化小三角形，输出 TriangleID + ClusterID + Depth
+- Pass 2（Deferred Material）：读取 Visibility Buffer → 加载顶点数据 → 插值 G-Buffer → 材质着色
+
+**动手实践**：用 Visibility Buffer 替换 G-Buffer
+- 实现 Visibility Pass（64-bit/pixel：30-bit Depth + 27-bit Cluster ID + 7-bit Triangle ID）
+- 实现 Deferred Material Pass（只对可见像素着色）
+- 验证：同样场景下渲染正确，overdraw 浪费消除
+
+---
+
+### 4.6 DDGI + SDF — 实时动态全局光照
+
+> 前置：4.3 Frame Graph + 4.5 Visibility Buffer
+
+**读什么**
+- `function/render/passes/`（现有光照 pass，理解直接光照 + 简单环境光）
+- DDGI 论文（浙大 SDFDDGI）；Flax 引擎 DDGI 实现文档
+
+**关键概念**
+- DDGI 不依赖硬件光追，用 SDF 做软件光线求交
+- 运行时每帧：组合场景级 Global Distance Field → Probe 用 SDF 光线求交 → 球谐光照数据
+
+**动手实践**：实现简化版 DDGI
+- 先给一个物体生成 SDF（如示例场景的静态 mesh）
+- 实现 Probe 网格（8×8 Tile），用 SDF 做光线求交
+- 生成球谐光照数据，在 G-Buffer 后处理阶段采样叠加
+- 验证：间接光出现（暗处有反射光），性能控制在 ~1.3ms
+
+---
+
+## 5. 阶段五：物理与架构进阶
+
+> 前置：阶段二 2.4 物理 + 2.2 ECS 已读完，阶段三「碰撞事件系统」已完成或并行。
+
+### 5.1 XPBD 物理仿真 — 布料与柔体
+
+**读什么**
+- `function/physics/physics_manager.{h,cpp}`（现有 Jolt 刚体集成）
+- `function/physics/physics_scene.{h,cpp}`（物理场景管理）
+- PBD/XPBD 理论综述；SIGGRAPH 2025 AVBD 论文；《恋与深空》StrayCloth 实践
+
+**关键概念**
+- PBD：直接操作粒子位置满足约束，无条件稳定
+- XPBD：引入拉格朗日乘子 λ，约束硬度可控且与时间步长无关
+- 工业实践：StrayCloth 用 XPBD + Substep（1/200~1/300），骨骼作为模拟粒子
+
+**动手实践**：在 Piccolo 里加一个 XPBD 布料组件
+- 新建 `cloth_component`，用 XPBD 框架模拟一块布（粒子网格 + 距离约束 + 弯曲约束）
+- 子步 substep（动态调整 1/120~1/240），保证稳定性
+- 用 DebugDrawManager 画出粒子位置，验证仿真正确
+- 把布料 mesh 挂到粒子上，渲染侧看到布料形变
+
+---
+
+### 5.2 ECS / DOD 混合架构改造
+
+**读什么**
+- `function/framework/object/game_object.h`（现有 GameObject-Component 容器模型）
+- Unity DOTS 文档；Piccolo 官方论坛 DOP 理论帖
+
+**关键概念**
+- GameObject-Component 是 OOP 架构：内存碎片化、缓存不友好
+- ECS 三要素：Entity（轻量 ID）/ Component（纯数据 SoA）/ System（处理特定组合，天然并行）
+- 混合架构：保留 GameObject 用于编辑器和高层逻辑，性能热点用 ECS 重写
+
+**动手实践**：把一个性能热点组件改造成 ECS 风格
+- 挑一个简单但量大的场景（如粒子系统或 Boids 群集）
+- 把 Component 数据从 `std::vector<GameObject*>` 改成 SoA 布局
+- 用 `std::for_each + std::execution::par` 多线程遍历
+- 对比改造前后的帧耗时和缓存命中率
+
+---
+
+### 5.3 碰撞事件系统
+
+**读什么**
+- `function/physics/physics_scene.{h,cpp}`（Jolt 物理场景的 contact 回调）
+- `function/physics/jolt/utils.{h,cpp}`（Jolt ↔ Piccolo 类型转换）
+- Jolt Physics 文档：ContactListener 回调
+
+**关键概念**
+- Jolt 的 `ContactListener` 提供 `OnContactAdded` / `OnContactPersisted` / `OnContactRemoved`
+
+**动手实践**：实现碰撞事件回调系统
+- 在 `PhysicsScene` 注册 `ContactListener`，转发碰撞事件到事件系统
+- 设计 `CollisionEvent` 结构（两个实体 ID + 接触点 + 法线 + 冲击力）
+- 在示例关卡里验证：两个物体碰撞时触发 `LOG_INFO`
+- 进阶：用 DebugDrawManager 在接触点画标记
+
+---
+
+## 6. 阶段六：前沿实验（持续探索）
+
+> 这些方向更适合独立实验，不阻塞主学习线。作为长期跟踪目标记录。
+
+### 6.1 3D Gaussian Splatting 混合渲染
+
+**读什么**
+- 3DGS 原始论文（SIGGRAPH 2023）
+- Unigine 2.20 / Unity / UE 的 3DGS 集成方案
+
+**关键概念**
+- 场景由数百万个 3D 高斯原语表示（非传统三角形网格）
+- 混合管线：Mesh 负责逻辑和物理，3DGS 负责视觉保真
+
+**实验方向**
+- 从 .ply 格式导入 3DGS 数据
+- 实现基础高斯光栅化 Pass（作为 FrameGraph 中的一个节点）
+- 与现有 G-Buffer 深度合成
+
+---
+
+### 6.2 AI 辅助渲染管线
+
+**读什么**
+- NVIDIA DLSS 5 官方博客（GTC 2026）
+- Arm 移动端神经渲染架构（NSS/NSSD/NFRU）
+
+**关键概念**
+- 神经超级采样（NSS）、神经降噪（NSSD）、神经帧率提升（NFRU）
+
+**实验方向**
+- 引入 TAA 作为基础时域累积框架
+- 研究轻量级 CNN 超分模型替代传统 Upsample Pass
+- 光追降噪器集成（SVGF 或神经降噪）
+- Frame Generation 插帧实验
+
+---
+
+### 6.3 SIGGRAPH 论文跟踪
+
+保持跟踪以下方向的最新论文，有合适的就纳入实验：
+- AVBD（SIGGRAPH 2025 Best）— 超快速物理求解器
+- Stable Cosserat Rods — 毛发/线缆仿真
+- Offset Geometric Contact — 碰撞检测精度提升
+- Implicit Position-Based Fluids — PBD 流体仿真
+- Vector-Valued Monte Carlo Integration — 蒙特卡洛渲染降噪
+
+---
+
+## 7. 进度追踪
+
+### 基础阶段（阶段一 ~ 阶段三）
+- [x] 阶段一：整体概览（架构注释 + 引擎架构图均已完成推送 main）
+- [x] 主循环帧耗时日志（2eda7a9：环形缓冲滑动平均已实现并推送 main）
+- [ ] 2.1 引擎地基 core（反射/序列化已读，实验字段已加，待编译验证）
+- [ ] 2.2 框架与 ECS（Light 组件已完成，待编译验证后提交推送）
+- [ ] 2.3–2.10 各模块（渲染 / 物理 / 动画 / 角色 / 输入 / 粒子 / UI / 资源）
+- [ ] 阶段三：综合改造清单
+
+### 进阶阶段（阶段四 ~ 阶段六）
+- [ ] 4. 渲染管线现代化
+  - [ ] 4.1 VSM 虚拟阴影贴图
+  - [ ] 4.2 体渲染（大气散射 + 体积雾）
+  - [ ] 4.3 Frame Graph 声明式管线
+  - [ ] 4.4 GPU-Driven Rendering
+  - [ ] 4.5 Visibility Buffer
+  - [ ] 4.6 DDGI + SDF 全局光照
+- [ ] 5. 物理与架构进阶
+  - [ ] 5.1 XPBD 物理仿真
+  - [ ] 5.2 ECS / DOD 混合架构
+  - [ ] 5.3 碰撞事件系统
+- [ ] 6. 前沿实验
+  - [ ] 6.1 3D Gaussian Splatting
+  - [ ] 6.2 AI 辅助渲染
+  - [ ] 6.3 SIGGRAPH 论文跟踪
+
+---
+
+## 8. 推荐节奏
 - 第 1 周：阶段一（整体概览）+ 2.1 / 2.2（core + ECS）。
 - 第 2–4 周：2.3 渲染（重点，最细）。
 - 第 5–6 周：2.4 物理（补盲）+ 2.5 / 2.6 动画 / 角色。
-- 第 7 周起：2.7–2.10 输入 / 粒子 / UI / 资源 快速过 + 进入阶段三改造。
+- 第 7 周：2.7–2.10 输入 / 粒子 / UI / 资源 快速过。
+- 第 8–9 周：阶段三综合改造（影子 / 抗锯齿 / 剔除 / 碰撞调试等）。
+- 第 10–14 周：阶段四渲染管线现代化（VSM → Frame Graph → GPU-Driven → VisBuffer → DDGI，逐节推进）。
+- 第 15–16 周：阶段五物理与架构进阶（XPBD / ECS 混合 / 碰撞事件）。
+- 第 17 周起：阶段六前沿实验 & 持续跟踪论文。
