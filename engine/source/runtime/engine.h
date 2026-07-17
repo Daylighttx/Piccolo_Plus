@@ -10,6 +10,17 @@
 namespace Piccolo
 {
     extern bool                            g_is_editor_mode;
+
+    // 渲染统计 HUD 数据（2.3 动手①）
+    struct EngineStats
+    {
+        int   fps {0};
+        float logic_ms_avg {0.f};
+        float render_ms_avg {0.f};
+        int   render_entity_count {0};
+        int   point_light_count {0};
+        int   visible_mesh_count {0};
+    };
     extern std::unordered_set<std::string> g_editor_tick_component_types;
 
     class PiccoloEngine
@@ -30,6 +41,9 @@ namespace Piccolo
         bool tickOneFrame(float delta_time);
 
         int getFPS() const { return m_fps; }
+
+        // 渲染统计（2.3 动手① HUD）
+        EngineStats getEngineStats() const;
 
     protected:
         void logicalTick(float delta_time);

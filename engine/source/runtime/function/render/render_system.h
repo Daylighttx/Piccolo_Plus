@@ -47,6 +47,7 @@ namespace Piccolo
         void                          swapLogicRenderData();
         RenderSwapContext&            getSwapContext();
         std::shared_ptr<RenderCamera> getRenderCamera() const;
+        std::shared_ptr<RenderScene>  getRenderScene() const { return m_render_scene; }
         std::shared_ptr<RHI>          getRHI() const;
 
         void      setRenderPipelineType(RENDER_PIPELINE_TYPE pipeline_type);

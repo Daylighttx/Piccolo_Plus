@@ -9,6 +9,7 @@
 #include "runtime/function/particle/particle_manager.h"
 #include "runtime/function/physics/physics_manager.h"
 #include "runtime/function/render/render_system.h"
+#include "runtime/function/render/render_scene.h"
 #include "runtime/function/render/window_system.h"
 #include "runtime/function/render/debugdraw/debug_draw_manager.h"
 
@@ -146,5 +147,31 @@ namespace Piccolo
         }
 
         m_fps = static_cast<int>(1.f / m_average_duration);
+    }
+
+    EngineStats PiccoloEngine::getEngineStats() const
+    {
+        EngineStats stats;
+        stats.fps = m_fps;
+
+        if (m_avg_count > 0)
+        {
+            stats.logic_ms_avg  = m_logic_ms_sum / m_avg_count;
+            stats.render_ms_avg = m_render_ms_sum / m_avg_count;
+        }
+
+        auto render_sys = g_runtime_global_context.m_render_system;
+        if (render_sys)
+        {
+            auto scene = render_sys->getRenderScene();
+            if (scene)
+            {
+                stats.render_entity_count = static_cast<int>(scene->m_render_entities.size());
+                stats.point_light_count   = static_cast<int>(scene->m_point_light_list.m_lights.size());
+                stats.visible_mesh_count  = static_cast<int>(scene->m_main_camera_visible_mesh_nodes.size());
+            }
+        }
+
+        return stats;
     }
 } // namespace Piccolo

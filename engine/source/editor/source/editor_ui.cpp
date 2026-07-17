@@ -265,13 +265,14 @@ namespace Piccolo
         return parent_label;
     }
 
-    void EditorUI::showEditorUI()
+    void EditorUI::        showEditorUI()
     {
         showEditorMenu(&m_editor_menu_window_open);
         showEditorWorldObjectsWindow(&m_asset_window_open);
         showEditorGameWindow(&m_game_engine_window_open);
         showEditorFileContentWindow(&m_file_content_window_open);
         showEditorDetailWindow(&m_detail_window_open);
+        showEditorEngineStatsWindow(&m_engine_stats_window_open);  // 2.3 动手①
     }
 
     void EditorUI::showEditorMenu(bool* p_open)
@@ -568,6 +569,34 @@ namespace Piccolo
             createClassUI(object_instance);
             m_editor_ui_creator["TreeNodePop"](("<" + component_ptr.getTypeName() + ">").c_str(), nullptr);
         }
+        ImGui::End();
+    }
+
+    // === 2.3 动手①：渲染统计 HUD ===
+    void EditorUI::showEditorEngineStatsWindow(bool* p_open)
+    {
+        ImGuiWindowFlags window_flags = ImGuiWindowFlags_None;
+
+        const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
+
+        if (!*p_open)
+            return;
+
+        ImGui::SetNextWindowBgAlpha(0.85f);
+        ImGui::Begin("Engine Stats", p_open, window_flags);
+
+        // 从引擎取帧耗时 + 场景统计
+        PiccoloEngine* engine = g_editor_global_context.m_engine_runtime;
+        EngineStats    stats  = engine ? engine->getEngineStats() : EngineStats{};
+
+        ImGui::Text("FPS:             %d", stats.fps);
+        ImGui::Text("Logic (ms):      %.2f", stats.logic_ms_avg);
+        ImGui::Text("Render (ms):     %.2f", stats.render_ms_avg);
+        ImGui::Separator();
+        ImGui::Text("Render Entities: %d", stats.render_entity_count);
+        ImGui::Text("Point Lights:    %d", stats.point_light_count);
+        ImGui::Text("Visible Meshes:  %d", stats.visible_mesh_count);
+
         ImGui::End();
     }
 

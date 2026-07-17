@@ -38,6 +38,7 @@ namespace Piccolo
         void showEditorFileContentWindow(bool* p_open);
         void showEditorGameWindow(bool* p_open);
         void showEditorDetailWindow(bool* p_open);
+        void showEditorEngineStatsWindow(bool* p_open);  // 2.3 动手①：渲染统计 HUD
 
         void setUIColorStyle();
 
@@ -56,6 +57,7 @@ namespace Piccolo
         bool m_game_engine_window_open       = true;
         bool m_file_content_window_open      = true;
         bool m_detail_window_open            = true;
+        bool m_engine_stats_window_open      = true;  // 2.3 动手①
         bool m_scene_lights_window_open      = true;
         bool m_scene_lights_data_window_open = true;
     };
