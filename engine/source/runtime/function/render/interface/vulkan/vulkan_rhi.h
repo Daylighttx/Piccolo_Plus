@@ -12,16 +12,17 @@
 
 namespace Piccolo
 {
-    
-
+    // VulkanRHI：RHI 抽象接口的唯一实现（当前引擎只支持 Vulkan）。
+    // 每个方法都是薄封装——把 RHI* 强转成 Vk*，调对应的 Vulkan 函数。
+    // 想支持 D3D12 / Metal，就另写一个 RHI 子类，上层无需改动。
     class VulkanRHI final : public RHI
     {
     public:
-        // initialize
+        // ---- 初始化 ----
         virtual void initialize(RHIInitInfo init_info) override final;
         virtual void prepareContext() override final;
 
-        // allocate and create
+        // ---- 资源创建与分配 ----
         bool allocateCommandBuffers(const RHICommandBufferAllocateInfo* pAllocateInfo, RHICommandBuffer* &pCommandBuffers) override;
         bool allocateDescriptorSets(const RHIDescriptorSetAllocateInfo* pAllocateInfo, RHIDescriptorSet* &pDescriptorSets) override;
         void createSwapchain() override;
@@ -33,6 +34,7 @@ namespace Piccolo
         RHIShader* createShaderModule(const std::vector<unsigned char>& shader_code) override;
         void createBuffer(RHIDeviceSize size, RHIBufferUsageFlags usage, RHIMemoryPropertyFlags properties, RHIBuffer* &buffer, RHIDeviceMemory* &buffer_memory) override;
         void createBufferAndInitialize(RHIBufferUsageFlags usage, RHIMemoryPropertyFlags properties, RHIBuffer*& buffer, RHIDeviceMemory*& buffer_memory, RHIDeviceSize size, void* data = nullptr, int datasize = 0) override;
+        // 用 VMA 分配器建 GPU buffer（asset 资源：顶点/索引/材质 UBO 走这里）
         bool createBufferVMA(VmaAllocator allocator,
             const RHIBufferCreateInfo* pBufferCreateInfo,
             const VmaAllocationCreateInfo* pAllocationCreateInfo,
@@ -52,6 +54,7 @@ namespace Piccolo
             RHIImage* &image, RHIDeviceMemory* &memory, RHIImageCreateFlags image_create_flags, uint32_t array_layers, uint32_t miplevels) override;
         void createImageView(RHIImage* image, RHIFormat format, RHIImageAspectFlags image_aspect_flags, RHIImageViewType view_type, uint32_t layout_count, uint32_t miplevels,
             RHIImageView* &image_view) override;
+        // 建带 VMA 分配的全局 image 并填像素（贴图上传入口）
         void createGlobalImage(RHIImage* &image, RHIImageView* &image_view, VmaAllocation& image_allocation, uint32_t texture_image_width, uint32_t texture_image_height, void* texture_image_pixels, RHIFormat texture_image_format, uint32_t miplevels = 0) override;
         void createCubeMap(RHIImage* &image, RHIImageView* &image_view, VmaAllocation& image_allocation, uint32_t texture_image_width, uint32_t texture_image_height, std::array<void*, 6> texture_image_pixels, RHIFormat texture_image_format, uint32_t miplevels) override;
         bool createCommandPool(const RHICommandPoolCreateInfo* pCreateInfo, RHICommandPool* &pCommandPool) override;
@@ -66,7 +69,7 @@ namespace Piccolo
         bool createSampler(const RHISamplerCreateInfo* pCreateInfo, RHISampler* &pSampler) override;
         bool createSemaphore(const RHISemaphoreCreateInfo* pCreateInfo, RHISemaphore* &pSemaphore) override;
 
-        // command and command write
+        // ---- 命令与命令录制 ----
         bool waitForFencesPFN(uint32_t fenceCount, RHIFence* const* pFence, RHIBool32 waitAll, uint64_t timeout) override;
         bool resetFencesPFN(uint32_t fenceCount, RHIFence* const* pFences) override;
         bool resetCommandPoolPFN(RHICommandPool* commandPool, RHICommandPoolResetFlags flags) override;
@@ -113,12 +116,12 @@ namespace Piccolo
         void waitForFences() override;
         bool waitForFences(uint32_t fenceCount, const RHIFence* const* pFences, RHIBool32 waitAll, uint64_t timeout);
 
-        // query
+        // ---- 查询 ----
         void getPhysicalDeviceProperties(RHIPhysicalDeviceProperties* pProperties) override;
         RHICommandBuffer* getCurrentCommandBuffer() const override;
         RHICommandBuffer* const* getCommandBufferList() const override;
         RHICommandPool* getCommandPoor() const override;
-        RHIDescriptorPool* getDescriptorPoor()const override;
+        RHIDescriptorPool* getDescriptorPoor() const override;
         RHIFence* const* getFenceList() const override;
         QueueFamilyIndices getQueueFamilyIndices() const override;
         RHIQueue* getGraphicsQueue() const override;
@@ -129,15 +132,17 @@ namespace Piccolo
         uint8_t getCurrentFrameIndex() const override;
         void setCurrentFrameIndex(uint8_t index) override;
 
-        // command write
+        // ---- 一次性命令 / 帧提交 ----
         RHICommandBuffer* beginSingleTimeCommands() override;
         void            endSingleTimeCommands(RHICommandBuffer* command_buffer) override;
+        // 渲染一帧前：检查 swapchain 是否需要重建（窗口 resize 等）
         bool prepareBeforePass(std::function<void()> passUpdateAfterRecreateSwapchain) override;
+        // 渲染一帧后：结束命令缓冲 → 提交队列（带 fence）→ vkQueuePresentKHR 上屏
         void submitRendering(std::function<void()> passUpdateAfterRecreateSwapchain) override;
         void pushEvent(RHICommandBuffer* commond_buffer, const char* name, const float* color) override;
         void popEvent(RHICommandBuffer* commond_buffer) override;
 
-        // destory
+        // ---- 销毁 ----
         virtual ~VulkanRHI() override final;
         void clear() override;
         void clearSwapchain() override;
@@ -156,19 +161,20 @@ namespace Piccolo
         void destroyBuffer(RHIBuffer* &buffer) override;
         void freeCommandBuffers(RHICommandPool* commandPool, uint32_t commandBufferCount, RHICommandBuffer* pCommandBuffers) override;
 
-        // memory
+        // ---- 内存映射 ----
         void freeMemory(RHIDeviceMemory* &memory) override;
         bool mapMemory(RHIDeviceMemory* memory, RHIDeviceSize offset, RHIDeviceSize size, RHIMemoryMapFlags flags, void** ppData) override;
         void unmapMemory(RHIDeviceMemory* memory) override;
         void invalidateMappedMemoryRanges(void* pNext, RHIDeviceMemory* memory, RHIDeviceSize offset, RHIDeviceSize size) override;
         void flushMappedMemoryRanges(void* pNext, RHIDeviceMemory* memory, RHIDeviceSize offset, RHIDeviceSize size) override;
         
-        //semaphores
+        // 贴图拷贝用的信号量
         RHISemaphore* &getTextureCopySemaphore(uint32_t index) override;
     public:
+        // 同时在途的帧数（GPU 端最多 3 帧 command buffer 在跑，靠 fence 门控 CPU）
         static uint8_t const k_max_frames_in_flight {3};
 
-        
+        // ---- Vulkan 核心对象 ----
         RHIQueue* m_graphics_queue{ nullptr };
         RHIQueue* m_compute_queue{ nullptr };
 
@@ -207,10 +213,10 @@ namespace Piccolo
 
         std::vector<VkFramebuffer> m_swapchain_framebuffers;
 
-        // asset allocator use VMA library
+        // VMA 分配器：所有 asset（mesh/材质/贴图）的 GPU 显存都经它分配
         VmaAllocator m_assets_allocator;
 
-        // function pointers
+        // 缓存的函数指针（避免每帧 vkGetDeviceProcAddr）
         PFN_vkCmdBeginDebugUtilsLabelEXT _vkCmdBeginDebugUtilsLabelEXT;
         PFN_vkCmdEndDebugUtilsLabelEXT   _vkCmdEndDebugUtilsLabelEXT;
         PFN_vkWaitForFences         _vkWaitForFences;
@@ -230,10 +236,10 @@ namespace Piccolo
         PFN_vkCmdDrawIndexed        _vkCmdDrawIndexed;
         PFN_vkCmdClearAttachments   _vkCmdClearAttachments;
 
-        // global descriptor pool
+        // 全局 descriptor pool（Vulkan 原生）
         VkDescriptorPool m_vk_descriptor_pool;
 
-        // command pool and buffers
+        // 每帧的 command pool / buffer / 信号量 / fence（共 k_max_frames_in_flight 套）
         uint8_t              m_current_frame_index {0};
         VkCommandPool        m_command_pools[k_max_frames_in_flight];
         VkCommandBuffer      m_vk_command_buffers[k_max_frames_in_flight];
@@ -253,12 +259,13 @@ namespace Piccolo
 
         std::vector<char const*> m_device_extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-        // default sampler cache
+        // 默认 sampler 缓存（linear / nearest / 按尺寸 mipmap）
         RHISampler* m_linear_sampler = nullptr;
         RHISampler* m_nearest_sampler = nullptr;
         std::map<uint32_t, RHISampler*> m_mipmap_sampler_map;
 
     private:
+        // ---- 初始化子步骤 ----
         void createInstance();
         void initializeDebugMessenger();
         void createWindowSurface();
@@ -268,7 +275,7 @@ namespace Piccolo
         void createCommandBuffers();
         void createDescriptorPool();
         void createSyncPrimitives();
-        void createAssetAllocator();
+        void createAssetAllocator();   // 创建 m_assets_allocator（VMA）
 
     public:
         bool isPointLightShadowEnabled() override;
@@ -278,7 +285,7 @@ namespace Piccolo
         bool m_enable_debug_utils_label{ true };
         bool m_enable_point_light_shadow{ true };
 
-        // used in descriptor pool creation
+        // descriptor pool 容量上限（影响可同时存在的 mesh/材质数量）
         uint32_t m_max_vertex_blending_mesh_count{ 256 };
         uint32_t m_max_material_count{ 256 };
 
@@ -305,8 +312,10 @@ namespace Piccolo
                                      VkImageTiling                tiling,
                                      VkFormatFeatureFlags         features);
 
+        // swapchain 三要素的选择（表面格式 / 呈现模式 / 分辨率）
         VkSurfaceFormatKHR
         chooseSwapchainSurfaceFormatFromDetails(const std::vector<VkSurfaceFormatKHR>& available_surface_formats);
+        // 优先 Mailbox（三缓冲低延迟），否则 fallback FIFO（vsync）
         VkPresentModeKHR
                    chooseSwapchainPresentModeFromDetails(const std::vector<VkPresentModeKHR>& available_present_modes);
         VkExtent2D chooseSwapchainExtentFromDetails(const VkSurfaceCapabilitiesKHR& capabilities);

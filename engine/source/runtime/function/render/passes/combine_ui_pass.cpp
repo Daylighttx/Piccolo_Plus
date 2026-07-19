@@ -1,3 +1,5 @@
+// [CombineUIPass 实现] 管线最后一棒：把场景图 + UI 图两张 input attachment 合成到 swapchain。
+// 输出到 swapchain image（finalLayout = PRESENT_SRC_KHR），之后由 RHI 提交并呈现。
 #include "runtime/function/render/passes/combine_ui_pass.h"
 
 #include "runtime/function/render/interface/vulkan/vulkan_rhi.h"

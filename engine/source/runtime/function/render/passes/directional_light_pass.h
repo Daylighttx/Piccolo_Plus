@@ -1,3 +1,6 @@
+// [DirectionalLightShadowPass] 方向光阴影贴图 Pass（正交投影，可扩展为级联 CSM）。
+// 从平行光方向渲染深度到 shadow map；主相机延迟光照阶段会采样它（m_directional_light_shadow_color_image_view）。
+// 与 PointLightShadowPass 一样，每帧由 RenderPipeline 在 MainCameraPass 之前单独 draw()。
 #pragma once
 
 #include "runtime/function/render/render_pass.h"

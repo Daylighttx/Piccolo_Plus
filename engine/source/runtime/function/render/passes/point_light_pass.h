@@ -1,3 +1,6 @@
+// [PointLightShadowPass] 点光源阴影贴图 Pass。
+// 从点光源视角（立方体 6 面）渲染场景深度到一张 shadow map，供主相机延迟光照阶段采样做阴影判定。
+// 它只“产”阴影贴图，不进主相机的 8-subpass 链；由 RenderPipeline 在每帧最前面单独 draw()。
 #pragma once
 
 #include "runtime/function/render/render_pass.h"

@@ -1,3 +1,11 @@
+// [MainCameraPass 实现] 引擎最核心、最复杂的 Pass。单次 VkRenderPass 内用 8 个 subpass 串起
+// 整条“延迟渲染 + 后处理 + UI”链。推荐阅读顺序：
+//   initialize → setupAttachments（GBuffer 附件布局）/ setupRenderPass（8 subpass + 依赖）
+//   → setupDescriptorSetLayout（7 套描述符布局）/ setupPipelines / setupDescriptorSet*
+//   → draw（总编排，cmdNextSubpass 串起各阶段）
+//   → drawMeshGbuffer（几何→GBuffer 批处理）/ drawDeferredLighting（整屏采样 GBuffer 算光照，写 backup_odd）
+//   → drawForward / drawMeshLighting / drawSkybox / drawAxis。
+// 阴影贴图不在此产生，由外部 shadow pass 提前渲染后以 image view 注入（见 render_pipeline.cpp）。
 #include "runtime/function/render/passes/main_camera_pass.h"
 #include "runtime/function/render/render_helper.h"
 #include "runtime/function/render/render_mesh.h"
@@ -21,6 +29,7 @@
 
 namespace Piccolo
 {
+    // 构造主相机 Pass 的全部 GPU 资源：依次建附件→建 VkRenderPass(8 subpass)→描述符布局→管线→描述符集→swapchain 帧缓冲，最后建粒子子 Pass。
     void MainCameraPass::initialize(const RenderPassInitInfo* init_info)
     {
         RenderPass::initialize(nullptr);
@@ -1910,6 +1919,8 @@ namespace Piccolo
         setupParticlePass();
     }
 
+    // 总编排：在一个 VkRenderPass 内用 cmdNextSubpass 串起 8 个阶段——
+    // BasePass(几何→GBuffer) → Deferred Lighting → Forward Lighting(粒子) → ToneMapping → ColorGrading → FXAA(可选) → UI → CombineUI，最后 EndRenderPass。
     void MainCameraPass::draw(ColorGradingPass& color_grading_pass,
                               FXAAPass&         fxaa_pass,
                               ToneMappingPass&  tone_mapping_pass,
@@ -2100,6 +2111,9 @@ namespace Piccolo
         m_rhi->cmdEndRenderPassPFN(m_rhi->getCurrentCommandBuffer());
     }
 
+    // 几何阶段：把“本相机可见网格”按 材质→mesh 重新分组(batch)，对每个 drawcall 用动态偏移把
+    // 每实例 model matrix 写进常驻 ring buffer（STORAGE_BUFFER_DYNAMIC），再 cmdDrawIndexed 一次性实例化绘制。
+    // 输出到 3 张 GBuffer 附件（法线 / 金属度·粗糙度·ShadingID / Albedo）。
     void MainCameraPass::drawMeshGbuffer()
     {
         struct MeshNode
@@ -2329,6 +2343,9 @@ namespace Piccolo
         m_rhi->popEvent(m_rhi->getCurrentCommandBuffer());
     }
 
+    // 延迟光照阶段：绑定一张“全屏三角形”管线，片段着色器(deferred_lighting_frag)直接采样上一 subpass 的
+    // GBuffer input attachments（法线/金属粗糙/Albedo/深度）+ 逐帧光照 uniform，算出最终 HDR 颜色写入 backup_odd。
+    // 光照与物体数量解耦——这是你将来加“程序化全屏特效/自定义管线”最该动手的地方。
     void MainCameraPass::drawDeferredLighting()
     {
         m_rhi->cmdBindPipelinePFN(m_rhi->getCurrentCommandBuffer(),

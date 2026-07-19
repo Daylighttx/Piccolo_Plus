@@ -21,12 +21,13 @@ namespace Piccolo
     class RenderPassBase;
     class RenderCamera;
 
+    // IBL（基于图像的光照）相关 GPU 资源：BRDF 查找表 + 辐照度图 + 高光图
     struct IBLResource
     {
         RHIImage* _brdfLUT_texture_image;
         RHIImageView* _brdfLUT_texture_image_view;
         RHISampler* _brdfLUT_texture_sampler;
-        VmaAllocation _brdfLUT_texture_image_allocation;
+        VmaAllocation _brdfLUT_texture_image_allocation;       // VMA 显存分配句柄
 
         RHIImage* _irradiance_texture_image;
         RHIImageView* _irradiance_texture_image_view;
@@ -39,13 +40,14 @@ namespace Piccolo
         VmaAllocation _specular_texture_image_allocation;
     };
 
+    // IBL 的 CPU 端像素数据（上传前的临时持有结构）
     struct IBLResourceData
     {
         void* _brdfLUT_texture_image_pixels;
         uint32_t             _brdfLUT_texture_image_width;
         uint32_t             _brdfLUT_texture_image_height;
         RHIFormat   _brdfLUT_texture_image_format;
-        std::array<void*, 6> _irradiance_texture_image_pixels;
+        std::array<void*, 6> _irradiance_texture_image_pixels; // 立方体贴图 6 面
         uint32_t             _irradiance_texture_image_width;
         uint32_t             _irradiance_texture_image_height;
         RHIFormat   _irradiance_texture_image_format;
@@ -55,6 +57,7 @@ namespace Piccolo
         RHIFormat   _specular_texture_image_format;
     };
 
+    // 色彩分级用的 3D LUT 贴图资源
     struct ColorGradingResource
     {
         RHIImage* _color_grading_LUT_texture_image;
@@ -70,30 +73,34 @@ namespace Piccolo
         RHIFormat _color_grading_LUT_texture_image_format;
     };
 
+    // 全局存储缓冲（UBO/SSBO）相关资源
     struct StorageBuffer
     {
-        // limits
+        // 设备对齐限制（来自物理设备 properties）
         uint32_t _min_uniform_buffer_offset_alignment{ 256 };
         uint32_t _min_storage_buffer_offset_alignment{ 256 };
         uint32_t _max_storage_buffer_range{ 1 << 27 };
         uint32_t _non_coherent_atom_size{ 256 };
 
+        // 128MB 常驻映射的 ring buffer（逐帧动态数据写这里，零提交开销）
         RHIBuffer* _global_upload_ringbuffer;
         RHIDeviceMemory* _global_upload_ringbuffer_memory;
         void* _global_upload_ringbuffer_memory_pointer;
-        std::vector<uint32_t> _global_upload_ringbuffers_begin;
-        std::vector<uint32_t> _global_upload_ringbuffers_end;
-        std::vector<uint32_t> _global_upload_ringbuffers_size;
+        std::vector<uint32_t> _global_upload_ringbuffers_begin;  // 每帧切片起点
+        std::vector<uint32_t> _global_upload_ringbuffers_end;    // 每帧切片当前写到的位置
+        std::vector<uint32_t> _global_upload_ringbuffers_size;   // 每帧切片大小
 
+        // 不绑定任何有效数据时用的空 descriptor 缓冲
         RHIBuffer* _global_null_descriptor_storage_buffer;
         RHIDeviceMemory* _global_null_descriptor_storage_buffer_memory;
 
-        // axis
+        // 坐标轴 gizmo 用的存储缓冲
         RHIBuffer* _axis_inefficient_storage_buffer;
         RHIDeviceMemory* _axis_inefficient_storage_buffer_memory;
         void* _axis_inefficient_storage_buffer_memory_pointer;
     };
 
+    // 聚合所有全局渲染资源
     struct GlobalRenderResource
     {
         IBLResource          _ibl_resource;
@@ -101,14 +108,17 @@ namespace Piccolo
         StorageBuffer        _storage_buffer;
     };
 
+    // RenderResource：RenderResourceBase 的真正实现，负责把所有 CPU 数据上传 GPU
     class RenderResource : public RenderResourceBase
     {
     public:
         void clear() override final;
 
+        // 上传关卡全局资源（IBL + LUT）
         virtual void uploadGlobalRenderResource(std::shared_ptr<RHI> rhi,
             LevelResourceDesc    level_resource_desc) override final;
 
+        // 上传游戏对象资源（mesh + 材质 一起 / 仅 mesh / 仅材质 三个重载）
         virtual void uploadGameObjectRenderResource(std::shared_ptr<RHI> rhi,
             RenderEntity         render_entity,
             RenderMeshData       mesh_data,
@@ -122,19 +132,21 @@ namespace Piccolo
             RenderEntity         render_entity,
             RenderMaterialData   material_data) override final;
 
+        // 每帧把相机/灯光写入逐帧存储缓冲
         virtual void updatePerFrameBuffer(std::shared_ptr<RenderScene>  render_scene,
             std::shared_ptr<RenderCamera> camera) override final;
 
+        // 取已上传的 mesh / 材质（Pass 绘制时调用）
         VulkanMesh& getEntityMesh(RenderEntity entity);
-
         VulkanPBRMaterial& getEntityMaterial(RenderEntity entity);
 
+        // 每帧重置 ring buffer 写指针到切片起点
         void resetRingBufferOffset(uint8_t current_frame_index);
 
-        // global rendering resource, include IBL data, global storage buffer
+        // 全局渲染资源，包含 IBL 数据 + 全局存储缓冲
         GlobalRenderResource m_global_render_resource;
 
-        // storage buffer objects
+        // 逐帧存储缓冲对象（UBO/SSBO 的 CPU 镜像，最终写进 ring buffer）
         MeshPerframeStorageBufferObject                 m_mesh_perframe_storage_buffer_object;
         MeshPointLightShadowPerframeStorageBufferObject m_mesh_point_light_shadow_perframe_storage_buffer_object;
         MeshDirectionalLightShadowPerframeStorageBufferObject
@@ -144,25 +156,28 @@ namespace Piccolo
         ParticleBillboardPerframeStorageBufferObject   m_particlebillboard_perframe_storage_buffer_object;
         ParticleCollisionPerframeStorageBufferObject   m_particle_collision_perframe_storage_buffer_object;
 
-        // cached mesh and material
+        // 已上传 mesh / 材质的缓存，key = asset id，保证同资源只上传一次
         std::map<size_t, VulkanMesh>        m_vulkan_meshes;
         std::map<size_t, VulkanPBRMaterial> m_vulkan_pbr_materials;
 
-        // descriptor set layout in main camera pass will be used when uploading resource
+        // 上传 mesh / 材质时要用到的 descriptor set layout（由 MainCameraPass 设置进来）
         RHIDescriptorSetLayout* const* m_mesh_descriptor_set_layout {nullptr};
         RHIDescriptorSetLayout* const* m_material_descriptor_set_layout {nullptr};
 
     private:
+        // 创建并映射 128MB 全局存储缓冲 ring buffer
         void createAndMapStorageBuffer(std::shared_ptr<RHI> rhi);
         void createIBLSamplers(std::shared_ptr<RHI> rhi);
         void createIBLTextures(std::shared_ptr<RHI>                        rhi,
                                std::array<std::shared_ptr<TextureData>, 6> irradiance_maps,
                                std::array<std::shared_ptr<TextureData>, 6> specular_maps);
 
+        // 按 asset id 查缓存，没有才真正上传（核心去重逻辑）
         VulkanMesh& getOrCreateVulkanMesh(std::shared_ptr<RHI> rhi, RenderEntity entity, RenderMeshData mesh_data);
         VulkanPBRMaterial&
         getOrCreateVulkanMaterial(std::shared_ptr<RHI> rhi, RenderEntity entity, RenderMaterialData material_data);
 
+        // mesh 上传拆成 buffer 创建 + 顶点填充 + 索引填充三步
         void updateMeshData(std::shared_ptr<RHI>                          rhi,
                             bool                                          enable_vertex_blending,
                             uint32_t                                      index_buffer_size,
@@ -185,6 +200,7 @@ namespace Piccolo
                                uint32_t             index_buffer_size,
                                void*                index_buffer_data,
                                VulkanMesh&          now_mesh);
+        // 把 CPU 贴图像素真正建 GPU image（走 staging + 布局切换）
         void updateTextureImageData(std::shared_ptr<RHI> rhi, const TextureDataToUpdate& texture_data);
     };
 } // namespace Piccolo

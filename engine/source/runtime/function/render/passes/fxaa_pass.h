@@ -1,3 +1,5 @@
+// [FXAAPass] FXAA 快速近似抗锯齿 subpass。
+// 对上一阶段（color grading 后）的整屏图做边缘抗锯齿。可选（m_enable_fxaa 控制），不开则整个 subpass 跳过。
 #pragma once
 
 #include "runtime/function/render/render_pass.h"

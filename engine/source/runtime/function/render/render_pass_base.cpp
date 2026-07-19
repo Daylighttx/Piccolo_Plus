@@ -1,3 +1,5 @@
+// [RenderPassBase 实现] 基类生命周期函数的空默认实现 + setCommonInfo 注入 RHI/RenderResource 两把“钥匙”。
+// 绝大多数 Pass 直接继承这套默认行为，只重写自己需要的虚函数（如 initialize / draw / preparePassData）。
 #include "runtime/function/render/render_pass_base.h"
 
 #include "runtime/core/base/macro.h"

@@ -1,3 +1,5 @@
+// [UIPass 实现] 把 ImGui（编辑器 UI）渲染进主相机 subpass 链（画到 backup_even）。
+// 含 uploadFonts() 上传字体图集；initializeUIRenderBackend() 把 ImGui 后端接到本 RHI。
 #include "runtime/function/render/passes/ui_pass.h"
 
 #include "runtime/function/render/interface/vulkan/vulkan_rhi.h"

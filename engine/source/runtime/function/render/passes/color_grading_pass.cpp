@@ -1,3 +1,5 @@
+// [ColorGradingPass 实现] 整屏后处理第 2 步：美术调色（色相/饱和度/对比度/ LUT）。
+// 单 draw()：采样 backup_even，按是否开启 FXAA 决定输出到 post_process_odd 还是回写 backup_odd。
 #include "runtime/function/render/passes/color_grading_pass.h"
 
 #include "runtime/function/render/interface/vulkan/vulkan_rhi.h"

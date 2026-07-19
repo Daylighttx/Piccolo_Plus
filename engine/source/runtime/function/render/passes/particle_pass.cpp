@@ -1,3 +1,6 @@
+// [ParticlePass 实现] GPU 粒子：compute（kickoff/emit/simulate + 间接 dispatch）驱动，billboard 渲染进主相机前向 subpass。
+// 含 CPU 端完整缓冲管理（alive/dead list、counter、indirect args、各 emitter batch）；
+// simulate()/copyNormalAndDepthImage() 由 RenderPipeline 在 MainCameraPass 之后调用。
 #include "runtime/function/render/passes/particle_pass.h"
 
 #include "runtime/function/render/interface/vulkan/vulkan_rhi.h"

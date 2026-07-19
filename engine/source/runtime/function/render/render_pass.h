@@ -1,3 +1,6 @@
+// [RenderPass] 带“帧缓冲/描述符集/管线”容器 + Vulkan 原生 subpass 框架的 Pass 基类。
+// MainCameraPass 继承自它，把“几何→延迟光照→前向→后处理→UI”全部塞进一个 VkRenderPass 的 8 个 subpass。
+// 关键：静态成员 m_visiable_nodes（原拼写 typo）是所有 Pass 共享的“本帧可见节点”指针集合，绘制时从这里取数据。
 #pragma once
 
 #include "runtime/function/render/render_common.h"

@@ -1,3 +1,5 @@
+// [ToneMappingPass 实现] 整屏后处理第 1 步：HDR→LDR 色调映射（采样 backup_odd，写 backup_even）。
+// 单 draw()：绑定全屏三角形 + tone_mapping_frag，做一次 input→output 的像素着色。
 #include "runtime/function/render/passes/tone_mapping_pass.h"
 
 #include "runtime/function/render/interface/vulkan/vulkan_rhi.h"

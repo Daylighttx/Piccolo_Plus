@@ -9,25 +9,34 @@
 #include <functional>
 
 #include "rhi_struct.h"
+
 namespace Piccolo
 {
     class WindowSystem;
 
+    // 初始化信息：RHI 需要知道用哪个窗口系统来创建 surface
     struct RHIInitInfo
     {
         std::shared_ptr<WindowSystem> window_system;
     };
     
+    // RHI = 图形后端抽象接口（Render Hardware Interface）。
+    // 这一层把所有"与具体图形 API 相关的操作"收敛成纯虚函数，
+    // 上层（RenderResource / Pass / RenderSystem）只跟 RHI 打交道，
+    // 不碰任何 Vulkan/D3D 代码。当前唯一实现是 VulkanRHI。
+    // 想换/自研后端，只需新写一个 RHI 子类，上层零改动。
     class RHI
     {
     public:
         virtual ~RHI() = 0;
 
+        // ---- 生命周期 ----
         virtual void initialize(RHIInitInfo initialize_info) = 0;
         virtual void prepareContext() = 0;
 
         virtual bool isPointLightShadowEnabled() = 0;
-        // allocate and create
+
+        // ---- 资源创建与分配 ----
         virtual bool allocateCommandBuffers(const RHICommandBufferAllocateInfo* pAllocateInfo, RHICommandBuffer* &pCommandBuffers) = 0;
         virtual bool allocateDescriptorSets(const RHIDescriptorSetAllocateInfo* pAllocateInfo, RHIDescriptorSet* &pDescriptorSets) = 0;
         virtual void createSwapchain() = 0;
@@ -37,14 +46,18 @@ namespace Piccolo
         virtual RHISampler* getOrCreateDefaultSampler(RHIDefaultSamplerType type) = 0;
         virtual RHISampler* getOrCreateMipmapSampler(uint32_t width, uint32_t height) = 0;
         virtual RHIShader* createShaderModule(const std::vector<unsigned char>& shader_code) = 0;
+        // 用裸 Vulkan 内存分配建 buffer（非 VMA）
         virtual void createBuffer(RHIDeviceSize size, RHIBufferUsageFlags usage, RHIMemoryPropertyFlags properties, RHIBuffer* &buffer, RHIDeviceMemory* &buffer_memory) = 0;
+        // 建 buffer 并立刻用 data 初始化（staging + copy 一步到位）
         virtual void createBufferAndInitialize(RHIBufferUsageFlags usage, RHIMemoryPropertyFlags properties, RHIBuffer*& buffer, RHIDeviceMemory*& buffer_memory, RHIDeviceSize size, void* data = nullptr, int datasize = 0) = 0;
+        // 用 VMA 分配器建 GPU buffer（asset 资源走这条路）
         virtual bool createBufferVMA(VmaAllocator allocator,
             const RHIBufferCreateInfo* pBufferCreateInfo,
             const VmaAllocationCreateInfo* pAllocationCreateInfo,
             RHIBuffer* &pBuffer,
             VmaAllocation* pAllocation,
             VmaAllocationInfo* pAllocationInfo) = 0;
+        // 带对齐要求的 VMA buffer（uniform buffer 需要按 minUniformBufferOffsetAlignment 对齐）
         virtual bool createBufferWithAlignmentVMA(
             VmaAllocator allocator,
             const RHIBufferCreateInfo* pBufferCreateInfo,
@@ -53,12 +66,16 @@ namespace Piccolo
             RHIBuffer* &pBuffer,
             VmaAllocation* pAllocation,
             VmaAllocationInfo* pAllocationInfo) = 0;
+        // 在 GPU 上拷贝 buffer 内容（staging → 真正 GPU buffer）
         virtual void copyBuffer(RHIBuffer* srcBuffer, RHIBuffer* dstBuffer, RHIDeviceSize srcOffset, RHIDeviceSize dstOffset, RHIDeviceSize size) = 0;
+        // 建 2D image（普通贴图/深度等）
         virtual void createImage(uint32_t image_width, uint32_t image_height, RHIFormat format, RHIImageTiling image_tiling, RHIImageUsageFlags image_usage_flags, RHIMemoryPropertyFlags memory_property_flags,
             RHIImage* &image, RHIDeviceMemory* &memory, RHIImageCreateFlags image_create_flags, uint32_t array_layers, uint32_t miplevels) = 0;
         virtual void createImageView(RHIImage* image, RHIFormat format, RHIImageAspectFlags image_aspect_flags, RHIImageViewType view_type, uint32_t layout_count, uint32_t miplevels,
             RHIImageView* &image_view) = 0;
+        // 建带 VMA 分配的全局 image 并填像素（贴图上传入口）
         virtual void createGlobalImage(RHIImage* &image, RHIImageView* &image_view, VmaAllocation& image_allocation, uint32_t texture_image_width, uint32_t texture_image_height, void* texture_image_pixels, RHIFormat texture_image_format, uint32_t miplevels = 0) = 0;
+        // 建立方体贴图（IBL 用）
         virtual void createCubeMap(RHIImage* &image, RHIImageView* &image_view, VmaAllocation& image_allocation, uint32_t texture_image_width, uint32_t texture_image_height, std::array<void*, 6> texture_image_pixels, RHIFormat texture_image_format, uint32_t miplevels) = 0;
         virtual void createCommandPool() = 0;
         virtual bool createCommandPool(const RHICommandPoolCreateInfo* pCreateInfo, RHICommandPool*& pCommandPool) = 0;
@@ -73,7 +90,7 @@ namespace Piccolo
         virtual bool createSampler(const RHISamplerCreateInfo* pCreateInfo, RHISampler* &pSampler) = 0;
         virtual bool createSemaphore(const RHISemaphoreCreateInfo* pCreateInfo, RHISemaphore* &pSemaphore) = 0;
 
-        // command and command write
+        // ---- 命令与命令录制 ----
         virtual bool waitForFencesPFN(uint32_t fenceCount, RHIFence* const* pFence, RHIBool32 waitAll, uint64_t timeout) = 0;
         virtual bool resetFencesPFN(uint32_t fenceCount, RHIFence* const* pFences) = 0;
         virtual bool resetCommandPoolPFN(RHICommandPool* commandPool, RHICommandPoolResetFlags flags) = 0;
@@ -113,13 +130,15 @@ namespace Piccolo
         virtual void cmdDispatchIndirect(RHICommandBuffer* commandBuffer, RHIBuffer* buffer, RHIDeviceSize offset) = 0;
         virtual void cmdPipelineBarrier(RHICommandBuffer* commandBuffer, RHIPipelineStageFlags srcStageMask, RHIPipelineStageFlags dstStageMask, RHIDependencyFlags dependencyFlags, uint32_t memoryBarrierCount, const RHIMemoryBarrier* pMemoryBarriers, uint32_t bufferMemoryBarrierCount, const RHIBufferMemoryBarrier* pBufferMemoryBarriers, uint32_t imageMemoryBarrierCount, const RHIImageMemoryBarrier* pImageMemoryBarriers) = 0;
         virtual bool endCommandBuffer(RHICommandBuffer* commandBuffer) = 0;
+        // 把 descriptor 写进 set（把 buffer/image 绑定到 shader 槽位）
         virtual void updateDescriptorSets(uint32_t descriptorWriteCount, const RHIWriteDescriptorSet* pDescriptorWrites, uint32_t descriptorCopyCount, const RHICopyDescriptorSet* pDescriptorCopies) = 0;
+        // 提交命令缓冲到队列（可带 fence 门控 CPU）
         virtual bool queueSubmit(RHIQueue* queue, uint32_t submitCount, const RHISubmitInfo* pSubmits, RHIFence* fence) = 0;
         virtual bool queueWaitIdle(RHIQueue* queue) = 0;
         virtual void resetCommandPool() = 0;
         virtual void waitForFences() = 0;
 
-        // query
+        // ---- 查询接口 ----
         virtual void getPhysicalDeviceProperties(RHIPhysicalDeviceProperties* pProperties) = 0;
         virtual RHICommandBuffer* getCurrentCommandBuffer() const = 0;
         virtual RHICommandBuffer* const* getCommandBufferList() const = 0;
@@ -131,19 +150,22 @@ namespace Piccolo
         virtual RHIQueue* getComputeQueue() const = 0;
         virtual RHISwapChainDesc getSwapchainInfo() = 0;
         virtual RHIDepthImageDesc getDepthImageInfo() const = 0;
-        virtual uint8_t getMaxFramesInFlight() const = 0;
+        virtual uint8_t getMaxFramesInFlight() const = 0;       // 返回 k_max_frames_in_flight（默认 3）
         virtual uint8_t getCurrentFrameIndex() const = 0;
         virtual void setCurrentFrameIndex(uint8_t index) = 0;
 
-        // command write
+        // ---- 一次性命令（资源上传常用的 begin/end 包裹）----
         virtual RHICommandBuffer* beginSingleTimeCommands() = 0;
         virtual void            endSingleTimeCommands(RHICommandBuffer* command_buffer) = 0;
+        // 渲染一帧前：检查 swapchain 是否需要重建
         virtual bool prepareBeforePass(std::function<void()> passUpdateAfterRecreateSwapchain) = 0;
+        // 渲染一帧后：提交命令缓冲 + 上屏（vkQueuePresentKHR）
         virtual void submitRendering(std::function<void()> passUpdateAfterRecreateSwapchain) = 0;
+        // 给命令缓冲加调试标签（NSight / RenderDoc 里可见）
         virtual void pushEvent(RHICommandBuffer* commond_buffer, const char* name, const float* color) = 0;
         virtual void popEvent(RHICommandBuffer* commond_buffer) = 0;
 
-        // destory
+        // ---- 销毁 ----
         virtual void clear() = 0;
         virtual void clearSwapchain() = 0;
         virtual void destroyDefaultSampler(RHIDefaultSamplerType type) = 0;
@@ -161,14 +183,14 @@ namespace Piccolo
         virtual void destroyBuffer(RHIBuffer* &buffer) = 0;
         virtual void freeCommandBuffers(RHICommandPool* commandPool, uint32_t commandBufferCount, RHICommandBuffer* pCommandBuffers) = 0;
 
-        // memory
+        // ---- 内存映射 ----
         virtual void freeMemory(RHIDeviceMemory* &memory) = 0;
         virtual bool mapMemory(RHIDeviceMemory* memory, RHIDeviceSize offset, RHIDeviceSize size, RHIMemoryMapFlags flags, void** ppData) = 0;
         virtual void unmapMemory(RHIDeviceMemory* memory) = 0;
         virtual void invalidateMappedMemoryRanges(void* pNext, RHIDeviceMemory* memory, RHIDeviceSize offset, RHIDeviceSize size) = 0;
         virtual void flushMappedMemoryRanges(void* pNext, RHIDeviceMemory* memory, RHIDeviceSize offset, RHIDeviceSize size) = 0;
 
-        //semaphores
+        // 贴图拷贝用的信号量
         virtual RHISemaphore* &getTextureCopySemaphore(uint32_t index) = 0;
 
     private:

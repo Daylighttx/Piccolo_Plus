@@ -1,3 +1,8 @@
+// [MainCameraPass] 渲染主相机画面的核心 Pass，也是整个引擎最复杂的一个 Pass。
+// 它不是一串独立 Pass，而是用 Vulkan 原生 subpass 把整条“延迟渲染 + 后处理 + UI”链写进同一个 VkRenderPass：
+//   subpass0 几何→GBuffer / subpass1 整屏延迟光照 / subpass2 前向(透明/粒子) /
+//   subpass3 色调映射 / subpass4 色彩分级 / subpass5 FXAA / subpass6 编辑器UI / subpass7 合成到 swapchain
+// 阴影贴图不在本链内，由 DirectionalLightShadowPass / PointLightShadowPass 提前单独渲染，结果以 image view 喂进来。
 #pragma once
 
 #include "runtime/function/render/render_pass.h"

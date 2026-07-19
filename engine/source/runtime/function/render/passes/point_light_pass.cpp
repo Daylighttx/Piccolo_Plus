@@ -1,3 +1,6 @@
+// [PointLightShadowPass 实现] 点光源阴影：从光源 6 面渲染深度到 shadow map。
+// 结构同其它 Pass：setupAttachments→setupRenderPass→setupFramebuffer→setupDescriptorSet→drawModel→draw。
+// 产出的 shadow map 由 MainCameraPass 在延迟光照阶段采样。
 #include "runtime/function/render/passes/point_light_pass.h"
 
 #include "runtime/function/render/render_helper.h"

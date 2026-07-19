@@ -1,3 +1,5 @@
+// [DirectionalLightShadowPass 实现] 方向光阴影：正交投影渲染深度到 shadow map。
+// drawModel() 把可见网格用 shadow 着色器画进深度图，供主相机延迟光照阶段采样（m_directional_light_shadow_color_image_view）。
 #include "runtime/function/render/passes/directional_light_pass.h"
 
 #include "runtime/function/render/render_helper.h"

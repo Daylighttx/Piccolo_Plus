@@ -1,3 +1,5 @@
+// [CombineUIPass] 合成“场景图 + UI 图”到 swapchain 的 subpass（管线最后一棒）。
+// 输入两张 input attachment（scene / ui），叠加后输出到最终呈现的 swapchain image（finalLayout = PRESENT_SRC_KHR）。
 #pragma once
 
 #include "runtime/function/render/render_pass.h"

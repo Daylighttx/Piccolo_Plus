@@ -1,3 +1,5 @@
+// [PickPass 实现] 鼠标拾取：把场景按“物体 ID”渲到 offscreen 图（_object_id_image），pick() 读回像素得到 GameObject。
+// 与主相机链独立，按需触发；recreateFramebuffer() 在 swapchain 重建时重做缓冲。
 #include "runtime/function/render/passes/pick_pass.h"
 
 #include "runtime/function/render/render_mesh.h"

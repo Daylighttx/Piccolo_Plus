@@ -1,3 +1,6 @@
+// [PickPass] 鼠标拾取 Pass（屏幕坐标 → 物体 ID）。
+// 把场景按“物体 ID”渲到一张 offscreen 图（_object_id_image），再 readback 像素得到鼠标下的 GameObject。
+// 与主相机 8-subpass 链完全独立，按需（点击时）触发。
 #pragma once
 
 #include "runtime/core/math/vector2.h"

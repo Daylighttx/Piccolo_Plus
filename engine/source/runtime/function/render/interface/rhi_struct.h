@@ -2,8 +2,14 @@
 
 #include "runtime/function/render/render_type.h"
 #include <optional>
+
 namespace Piccolo
 {
+    // 本文件是 Vulkan 结构体到 RHI 结构体的「1:1 翻译层」：
+    // 每个 RHI* 类/结构体都对应一个 Vk*（如 RHIImage ↔ VkImage，
+    // RHISubmitInfo ↔ VkSubmitInfo）。VulkanRHI 实现里就是把 RHI* 强转成 Vk* 再调用。
+    // 这样上层（RenderResource / Pass）只认 RHI 类型，换图形后端时这部分也可以整体替换。
+    // 结构字段与 Vulkan 官方定义一致，命名已尽量自解释，故不再逐字段加注。
     /////////////////////////////////////////////////
     #define RHI_DELETE_PTR(x) delete x; x = nullptr;
 

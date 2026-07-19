@@ -1,3 +1,5 @@
+// [UIPass] 把编辑器 UI（ImGui）画到屏幕的 subpass。
+// 接在 FXAA 之后，画到 backup_even；同时 preserve backup_odd（场景图）供下一棒 combine_ui 合成时用。
 #pragma once
 
 #include "runtime/function/render/render_pass.h"

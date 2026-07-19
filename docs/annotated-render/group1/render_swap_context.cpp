@@ -1,77 +1,71 @@
-#include "runtime/function/render/render_swap_context.h"
+#include "runtime/function/render/render_swap_context.h"  // 自身头文件
 
-#include <utility>
+#include <utility>  // std::swap / std::move
 
 namespace Piccolo
 {
-    // ===================== GameObjectResourceDesc 实现 =====================
-    // 这是一个 FIFO 队列（deque），逻辑线程在队尾 push，渲染线程从队首 pop
+    // —— GameObjectResourceDesc 的成员实现 ——
 
-    // 向队列尾部追加一个游戏对象描述（逻辑线程通过 addDirtyGameObject 最终落到这里）
+    // 入队：把一个物体描述加到队尾
     void GameObjectResourceDesc::add(GameObjectDesc& desc) { m_game_object_descs.push_back(desc); }
 
-    // 队列是否为空：渲染线程在消费前用它判断是否还有待处理对象
+    // 队列是否为空
     bool GameObjectResourceDesc::isEmpty() const { return m_game_object_descs.empty(); }
 
-    // 返回队首元素引用（不弹出），渲染线程先取出来处理，处理完再 pop 移除
+    // 取队首元素(下一个要处理的)，不弹出
     GameObjectDesc& GameObjectResourceDesc::getNextProcessObject() { return m_game_object_descs.front(); }
 
-    // 弹出队首元素，表示这个游戏对象已经被渲染层处理完毕
+    // 弹出队首(渲染层消费完后调用)
     void GameObjectResourceDesc::pop() { m_game_object_descs.pop_front(); }
 
-    // ===================== ParticleSubmitRequest 实现 =====================
+    // —— ParticleSubmitRequest 的成员实现 ——
 
-    // 向待提交列表追加一个粒子发射器描述
+    // 加入一个发射器描述
     void ParticleSubmitRequest::add(ParticleEmitterDesc& desc) { m_emitter_descs.push_back(desc); }
 
-    // 返回待提交的发射器总数
+    // 发射器数量
     unsigned int ParticleSubmitRequest::getEmitterCount() const { return m_emitter_descs.size(); }
 
-    // 按索引取出某个发射器描述（渲染层遍历提交时使用）
+    // 按索引取发射器描述
     const ParticleEmitterDesc& ParticleSubmitRequest::getEmitterDesc(unsigned int index)
     {
         return m_emitter_descs[index];
     }
 
-    // ===================== EmitterTransformRequest 实现 =====================
+    // —— EmitterTransformRequest 的成员实现 ——
 
-    // 追加一个粒子发射器的变换描述（位置/旋转等）
+    // 加入一个变换描述
     void EmitterTransformRequest::add(ParticleEmitterTransformDesc& desc) { m_transform_descs.push_back(desc); }
 
-    // 返回待更新变换的发射器总数
+    // 变换数量
     unsigned int EmitterTransformRequest::getEmitterCount() const { return m_transform_descs.size(); }
 
-    // 按索引取出某个发射器的变换描述
+    // 按索引取变换描述
     const ParticleEmitterTransformDesc& EmitterTransformRequest::getNextEmitterTransformDesc(unsigned int index)
     {
         return m_transform_descs[index];
     }
 
-    // ===================== RenderSwapContext：双缓冲的核心访问接口 =====================
+    // —— RenderSwapContext 的核心实现 ——
 
-    // 逻辑线程拿到它当前应写入的那一块缓冲（m_logic_swap_data_index 指向的槽位）
+    // 返回逻辑层当前应写的缓冲
     RenderSwapData& RenderSwapContext::getLogicSwapData() { return m_swap_data[m_logic_swap_data_index]; }
 
-    // 渲染线程拿到它当前应读取的那一块缓冲（m_render_swap_data_index 指向的槽位）
-    // 注意：逻辑写的槽位和渲染读的槽位默认不同（0 和 1），两层物理上操作不同的内存，因此无需加锁
+    // 返回渲染层当前应读的缓冲
     RenderSwapData& RenderSwapContext::getRenderSwapData() { return m_swap_data[m_render_swap_data_index]; }
 
-    // 每帧末尾由渲染线程（或主循环）调用：尝试交换前后缓冲
+    // 尝试交换：只有渲染侧消费空了才真正 swap
     void RenderSwapContext::swapLogicRenderData()
     {
-        // 只有当渲染侧那块缓冲已被完全消费（所有 optional 字段都为空）时，才真正交换
-        if (isReadyToSwap())
+        if (isReadyToSwap())  // 渲染槽里还有未消费数据就不换(防止覆盖)
         {
             swap();
         }
-        // 否则本次不交换：逻辑线程继续往自己那块写，渲染线程继续读自己那块，互不影响
-        // （这是它“天然支持两层不同步率”的根本原因，而非为了避免画面撕裂）
     }
 
-    // 判断“渲染侧缓冲是否已被消费干净”——这是双缓冲能否安全交换的唯一闸门
+    // 判断是否可交换：渲染槽的所有 optional 字段都为空 = 已消费完
     bool RenderSwapContext::isReadyToSwap() const
     {
-        // 只要渲染侧那块里还有任意一个字段没被消费（has_value），就认为还没准备好交换
         return !(m_swap_data[m_render_swap_data_index].m_level_resource_desc.has_value() ||
                  m_swap_data[m_render_swap_data_index].m_game_object_resource_desc.has_value() ||
                  m_swap_data[m_render_swap_data_index].m_game_object_to_delete.has_value() ||
@@ -81,46 +75,46 @@ namespace Piccolo
                  m_swap_data[m_render_swap_data_index].m_emitter_transform_request.has_value());
     }
 
-    // ===================== 各 reset* 函数 =====================
-    // 交换前先清空“渲染侧缓冲”的对应字段，把它还原成空白，准备给逻辑线程下回写入
-    // 注意：reset 的永远是 m_render_swap_data_index 那一块，即“即将交给逻辑层”的那块
-
+    // 清空关卡资源字段(在渲染槽上)
     void RenderSwapContext::resetLevelRsourceSwapData()
     {
         m_swap_data[m_render_swap_data_index].m_level_resource_desc.reset();
     }
 
+    // 清空物体新增/更新字段
     void RenderSwapContext::resetGameObjectResourceSwapData()
     {
         m_swap_data[m_render_swap_data_index].m_game_object_resource_desc.reset();
     }
 
+    // 清空物体删除字段
     void RenderSwapContext::resetGameObjectToDelete()
     {
         m_swap_data[m_render_swap_data_index].m_game_object_to_delete.reset();
     }
 
+    // 清空粒子提交字段
     void RenderSwapContext::resetPartilceBatchSwapData()
     {
         m_swap_data[m_render_swap_data_index].m_particle_submit_request.reset();
     }
 
-    void RenderSwapContext::resetCameraSwapData()
-    {
-        m_swap_data[m_render_swap_data_index].m_camera_swap_data.reset();
-    }
+    // 清空相机字段
+    void RenderSwapContext::resetCameraSwapData() { m_swap_data[m_render_swap_data_index].m_camera_swap_data.reset(); }
 
+    // 清空粒子 tick 字段
     void RenderSwapContext::resetEmitterTickSwapData()
     {
         m_swap_data[m_render_swap_data_index].m_emitter_tick_request.reset();
     }
 
+    // 清空粒子变换字段
     void RenderSwapContext::resetEmitterTransformSwapData()
     {
         m_swap_data[m_render_swap_data_index].m_emitter_transform_request.reset();
     }
 
-    // 执行真正的索引交换：先把渲染侧缓冲全部 reset，再交换两个索引
+    // 真正交换：先清空渲染侧所有字段，再交换两个索引
     void RenderSwapContext::swap()
     {
         resetLevelRsourceSwapData();
@@ -130,31 +124,27 @@ namespace Piccolo
         resetEmitterTickSwapData();
         resetEmitterTransformSwapData();
         resetPartilceBatchSwapData();
-        // 交换索引：原本逻辑写 0、渲染读 1，交换后逻辑写 1、渲染读 0（这就是 ping-pong 双缓冲）
-        std::swap(m_logic_swap_data_index, m_render_swap_data_index);
+        std::swap(m_logic_swap_data_index, m_render_swap_data_index);  // 索引互换：逻辑/渲染指向的块对调
     }
 
-    // ===================== RenderSwapData 的辅助写入函数 =====================
-    // 逻辑线程通过这些函数往缓冲里塞数据；每个函数都“懒初始化”对应的 optional 容器
+    // —— RenderSwapData 的辅助写入函数(逻辑层调用) ——
 
-    // 逻辑线程调用：提交一个“新增/更新”的游戏对象（使用移动语义，避免一次拷贝）
+    // 标记物体脏(新增或更新)：懒初始化后入队
     void RenderSwapData::addDirtyGameObject(GameObjectDesc&& desc)
     {
-        // 若 optional 容器已存在，直接往队列里加
         if (m_game_object_resource_desc.has_value())
         {
-            m_game_object_resource_desc->add(desc);
+            m_game_object_resource_desc->add(desc);  // 已有容器直接加
         }
         else
         {
-            // 否则先创建一个空容器并加入，再整体赋给 optional
             GameObjectResourceDesc go_descs;
-            go_descs.add(desc);
+            go_descs.add(desc);                       // 首次：建容器再加
             m_game_object_resource_desc = go_descs;
         }
     }
 
-    // 逻辑线程调用：提交一个“删除”的游戏对象
+    // 标记物体删除：同上，入"待删除"队列
     void RenderSwapData::addDeleteGameObject(GameObjectDesc&& desc)
     {
         if (m_game_object_to_delete.has_value())
@@ -169,7 +159,7 @@ namespace Piccolo
         }
     }
 
-    // 逻辑线程调用：登记一个需要新建的粒子发射器
+    // 提交新粒子发射器
     void RenderSwapData::addNewParticleEmitter(ParticleEmitterDesc& desc)
     {
         if (m_particle_submit_request.has_value())
@@ -184,7 +174,7 @@ namespace Piccolo
         }
     }
 
-    // 逻辑线程调用：登记一个需要本帧 tick 的粒子发射器（只存 ID，真正的动画数据由渲染层读取）
+    // 请求 tick 某个发射器
     void RenderSwapData::addTickParticleEmitter(ParticleEmitterID id)
     {
         if (m_emitter_tick_request.has_value())
@@ -199,7 +189,7 @@ namespace Piccolo
         }
     }
 
-    // 逻辑线程调用：更新某个粒子发射器的变换（位置/旋转等）
+    // 更新粒子发射器变换
     void RenderSwapData::updateParticleTransform(ParticleEmitterTransformDesc& desc)
     {
         if (m_emitter_transform_request.has_value())

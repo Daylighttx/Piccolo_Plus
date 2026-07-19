@@ -111,6 +111,8 @@ namespace Piccolo
         getOrCreateVulkanMaterial(rhi, render_entity, material_data);
     }
 
+    // 每帧把相机矩阵/灯光写进逐帧存储缓冲对象（之后由 ring buffer 真正刷到 GPU）。
+    // 这里只做 CPU 端的数据组装，不碰 GPU；真正的上传在 Pass 里写入 ring buffer 映射指针。
     void RenderResource::updatePerFrameBuffer(std::shared_ptr<RenderScene>  render_scene,
         std::shared_ptr<RenderCamera> camera)
     {
@@ -268,6 +270,8 @@ namespace Piccolo
             specular_cubemap_miplevels);
     }
 
+    // 按 asset id 查缓存：已上传过就直接返回缓存的 VulkanMesh（去重核心）。
+    // 没缓存才走 updateMeshData 真正上传顶点/索引 buffer（staging → VMA → copy）。
     VulkanMesh&
         RenderResource::getOrCreateVulkanMesh(std::shared_ptr<RHI> rhi, RenderEntity entity, RenderMeshData mesh_data)
     {
@@ -325,6 +329,8 @@ namespace Piccolo
         }
     }
 
+    // 按 asset id 查缓存：已上传过就返回缓存的 VulkanPBRMaterial。
+    // 没缓存才：建材质 UBO(staging→VMA 对齐 buffer→copy) + 5 张贴图(createGlobalImage) + 写 descriptor set。
     VulkanPBRMaterial& RenderResource::getOrCreateVulkanMaterial(std::shared_ptr<RHI> rhi,
         RenderEntity         entity,
         RenderMaterialData   material_data)
@@ -614,6 +620,9 @@ namespace Piccolo
         updateIndexBuffer(rhi, index_buffer_size, index_buffer_data, now_mesh);
     }
 
+    // 上传顶点 buffer：在 staging buffer 里按 Vulkan 顶点布局重排（position / varying / joint binding），
+    // 用 VMA 建 GPU_ONLY 顶点 buffer，再 copyBuffer 拷过去，最后写 descriptor set。
+    // enable_vertex_blending 时分出 4 块 buffer（含骨骼 joint binding）；否则 3 块。
     void RenderResource::updateVertexBuffer(std::shared_ptr<RHI>                   rhi,
                                             bool                                   enable_vertex_blending,
                                             uint32_t                               vertex_buffer_size,
@@ -1003,6 +1012,7 @@ namespace Piccolo
         }
     }
 
+    // 上传索引 buffer：staging(HOST_VISIBLE, memcpy) → VMA GPU_ONLY 索引 buffer → copyBuffer → 删 staging。
     void RenderResource::updateIndexBuffer(std::shared_ptr<RHI> rhi,
                                            uint32_t             index_buffer_size,
                                            void*                index_buffer_data,
@@ -1133,6 +1143,9 @@ namespace Piccolo
             m_global_render_resource._storage_buffer._global_upload_ringbuffers_begin[current_frame_index];
     }
 
+    // 创建并映射 128MB 全局存储缓冲 ring buffer（逐帧动态数据走这里）。
+    // 预分配 HOST_VISIBLE|HOST_COHERENT，按 k_max_frames_in_flight(3) 切成 3 片，常驻映射不解除。
+    // 每帧 updatePerFrameBuffer 往当前帧切片写数据，零提交、零拷贝开销。
     void RenderResource::createAndMapStorageBuffer(std::shared_ptr<RHI> rhi)
     {
         VulkanRHI* raw_rhi = static_cast<VulkanRHI*>(rhi.get());

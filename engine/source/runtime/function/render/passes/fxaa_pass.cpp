@@ -1,3 +1,5 @@
+// [FXAAPass 实现] 整屏后处理第 3 步（可选）：FXAA 边缘抗锯齿。
+// 单 draw()：对 color grading 后的图做快速近似抗锯齿；m_enable_fxaa 为 false 时主相机链会跳过该 subpass。
 #include "runtime/function/render/passes/fxaa_pass.h"
 
 #include "runtime/function/render/render_common.h"

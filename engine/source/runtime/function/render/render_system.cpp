@@ -1,5 +1,19 @@
 #include "runtime/function/render/render_system.h"
 
+// ============================================================================
+// RenderSystem 实现 —— 渲染总成
+// ----------------------------------------------------------------------------
+// 职责：每帧把"逻辑层数据"变成"屏幕上的一帧"。
+// 阅读顺序建议：
+//   1) initialize()     —— 引擎启动时装配所有渲染子系统
+//   2) tick()           —— 每帧入口，6 步调度（看下面的逐行注释）
+//   3) processSwapData()—— 真正消费 RenderSwapContext 的数据（提交部分核心）
+//   4) updateLights()   —— 把 LightComponent 收集进 RenderScene（阶段二 2.2）
+//   5) swapLogicRenderData() —— 双缓冲交换的唯一对外入口
+// 注意：当前引擎是单线程主循环（engine.cpp 里逻辑 tick 后紧接着 render tick），
+//       所以 RenderSwapContext 的双缓冲目前只是"结构上的解耦"，并未真正并行。
+// ============================================================================
+
 #include "runtime/core/base/macro.h"
 
 #include "runtime/resource/asset_manager/asset_manager.h"
@@ -98,25 +112,26 @@ namespace Piccolo
                  .layout;
     }
 
+    // tick：每帧渲染入口，固定 6 步。这是整条渲染流水线的"总指挥"。
     void RenderSystem::tick(float delta_time)
     {
-        // process swap data between logic and render contexts
+        // ① 消费逻辑层数据：把 swap context 里的物体增删/相机/粒子转成渲染层状态
         processSwapData();
 
-        // prepare render command context
+        // ② 准备命令上下文（RHI 层每帧的 command buffer / 帧索引等前置工作）
         m_rhi->prepareContext();
 
-        // update per-frame buffer
+        // ③ 更新逐帧动态缓冲：把视图矩阵/投影矩阵/灯光等写进常驻 ring buffer
         m_render_resource->updatePerFrameBuffer(m_render_scene, m_render_camera);
 
-        // === 阶段二 2.2：把挂在对象上的 LightComponent 收集进渲染场景 ===
+        // ④ 收集灯光：把挂在对象上的 LightComponent 重建进 RenderScene（阶段二 2.2）
         updateLights();
 
-        // update per-frame visible objects
+        // ⑤ 视锥+光源剔除：算出本帧每个 pass 真正要画的可见物体列表
         m_render_scene->updateVisibleObjects(std::static_pointer_cast<RenderResource>(m_render_resource),
                                              m_render_camera);
 
-        // prepare pipeline's render passes data
+        // ⑥ 给各 Pass 喂数据 + 真正画一帧（forward 或 deferred 由管线类型决定）
         m_render_pipeline->preparePassData(m_render_resource);
 
         g_runtime_global_context.m_debugdraw_manager->tick(delta_time);
@@ -282,6 +297,15 @@ namespace Piccolo
         m_render_pipeline->initializeUIRenderBackend(window_ui);
     }
 
+    // processSwapData：提交部分的核心。
+    // 它从 RenderSwapContext 的"渲染侧缓冲"取出逻辑层塞进来的数据，逐个处理：
+    //   - 关卡级资源（IBL/色彩分级）：uploadGlobalRenderResource 上传一次
+    //   - 游戏对象（队列，可能多帧累积）：对队首每个 part 做 ① 分配 instance id
+    //     ② 加载/查缓存 mesh ③ uploadGameObjectRenderResource 上传 GPU ④ 写进 RenderScene
+    //   - 相机/粒子提交请求：直接转发给 RenderCamera / ParticlePass
+    // ★ 现代化改造点：这里在帧热路径里同步上传 GPU（uploadGameObjectRenderResource 内部
+    //   会等 fence），新建物体时本帧会卡在上传上；且移动物体也走"完整 per-part 路径"，
+    //   只为更新一个 model matrix——这是 P0/P1 优化要解决的问题。
     void RenderSystem::processSwapData()
     {
         RenderSwapData& swap_data = m_swap_context.getRenderSwapData();
@@ -378,11 +402,15 @@ namespace Piccolo
                     // create game object on the graphics api side
                     if (!is_mesh_loaded)
                     {
+                        // ★ 同步阻塞上传：把 mesh 顶点/索引拷到 GPU。
+                        //   内部走 staging buffer + vkQueueSubmit + 等 fence，
+                        //   未缓存的资源在当帧热路径直接卡在这里（P1 改造点）。
                         m_render_resource->uploadGameObjectRenderResource(m_rhi, render_entity, mesh_data);
                     }
 
                     if (!is_material_loaded)
                     {
+                        // 同理：材质（贴图 + PBR 参数 UBO）也是当帧同步上传 GPU
                         m_render_resource->uploadGameObjectRenderResource(m_rhi, render_entity, material_data);
                     }
 

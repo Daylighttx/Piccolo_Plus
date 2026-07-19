@@ -17,6 +17,19 @@
 
 namespace Piccolo
 {
+// ============================================================================
+// RenderPipeline 实现 —— 一帧的绘制编排
+// ----------------------------------------------------------------------------
+// 阅读顺序：
+//   1) initialize()           —— 装配 10 个 Pass 并串好帧缓冲视图依赖
+//   2) deferredRender()       —— 默认管线：阴影 → 主相机(GBuffer+延迟光照) → 粒子
+//   3) forwardRender()        —— 前向版本（无延迟光照，结构相同）
+//   4) passUpdateAfterRecreateSwapchain() —— swapchain 重建后刷新各 Pass 缓冲
+// 关键点：主相机 Pass 把"色调映射/色彩分级/FXAA/UI/合成UI"作为自己的 8 个
+//         subpass 串在一条 render pass 里，因此这些 Pass 的 initialize 都
+//         依赖 MainCameraPass 的 render pass 与帧缓冲视图。
+// ============================================================================
+
     void RenderPipeline::initialize(RenderPipelineInitInfo init_info)
     {
         m_point_light_shadow_pass = std::make_shared<PointLightShadowPass>();
@@ -113,6 +126,8 @@ namespace Piccolo
 
     }
 
+    // forwardRender：前向渲染管线的每帧编排，结构与 deferredRender 相同，
+    // 区别仅在于主相机 Pass 调用 drawForward()（跳过延迟光照 subpass，直接逐物体光照）。
     void RenderPipeline::forwardRender(std::shared_ptr<RHI> rhi, std::shared_ptr<RenderResourceBase> render_resource)
     {
         VulkanRHI*      vulkan_rhi      = static_cast<VulkanRHI*>(rhi.get());
@@ -163,6 +178,13 @@ namespace Piccolo
         static_cast<ParticlePass*>(m_particle_pass.get())->simulate();
     }
 
+    // deferredRender：默认管线的每帧绘制编排。
+    // 顺序：① 重置 ring buffer 偏移 → ② 等上一帧 fence（门控最多 3 帧在途）→
+    //       ③ 重置命令池 → ④ 准备/必要时重建 swapchain →
+    //       ⑤ 方向光阴影 Pass → ⑥ 点光阴影 Pass →
+    //       ⑦ 主相机 Pass（内部 8 个 subpass：几何→GBuffer→延迟光照→前向→
+    //          调色→色彩分级→FXAA→UI→合成UI）→ ⑧ debug draw →
+    //       ⑨ submitRendering 提交到 GPU → ⑩ 粒子拷贝深度+模拟（在提交之后异步推进）
     void RenderPipeline::deferredRender(std::shared_ptr<RHI> rhi, std::shared_ptr<RenderResourceBase> render_resource)
     {
         VulkanRHI*      vulkan_rhi      = static_cast<VulkanRHI*>(rhi.get());
@@ -212,6 +234,9 @@ namespace Piccolo
         static_cast<ParticlePass*>(m_particle_pass.get())->simulate();
     }
 
+    // passUpdateAfterRecreateSwapchain：窗口大小变化导致 swapchain 重建后，
+    // 各 Pass 的帧缓冲/输入附件视图都失效，必须按当前 MainCameraPass 的新帧缓冲
+    // 视图重新 initialize 一次。prepareBeforePass 检测到需要重建时会回调本函数。
     void RenderPipeline::passUpdateAfterRecreateSwapchain()
     {
         MainCameraPass&   main_camera_pass   = *(static_cast<MainCameraPass*>(m_main_camera_pass.get()));

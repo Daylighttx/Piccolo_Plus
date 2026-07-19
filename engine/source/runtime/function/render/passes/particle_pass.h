@@ -1,3 +1,6 @@
+// [ParticlePass] GPU 粒子系统 Pass（compute 模拟 + billboard 渲染）。
+// 用 compute shader 做 kickoff/emit/simulate（三条管线 + 间接 dispatch），把存活粒子以 billboard 方式
+// 渲染进主相机的前向 lighting subpass（subpass2）。含完整 CPU 端粒子缓冲管理（alive/dead list、counter、indirect args）。
 #pragma once
 
 #include "runtime/function/particle/particle_common.h"
