@@ -69,6 +69,7 @@
 #endif
 
 #include <cstring>
+#include <cstdlib>
 #include <iostream>
 #include <set>
 #include <stdexcept>
@@ -96,6 +97,11 @@ namespace Piccolo
 #else
         m_enable_validation_Layers  = false;
         m_enable_debug_utils_label  = false;
+
+        if (const char* debug_labels = std::getenv("PICCOLO_VULKAN_DEBUG_LABELS"))
+        {
+            m_enable_debug_utils_label = std::strcmp(debug_labels, "1") == 0;
+        }
 #endif
 
 #if defined(__GNUC__) && defined(__MACH__)

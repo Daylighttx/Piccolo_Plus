@@ -34,6 +34,7 @@ namespace Piccolo
         std::vector<RenderMeshNode> m_directional_light_visible_mesh_nodes;
         std::vector<RenderMeshNode> m_point_lights_visible_mesh_nodes;
         std::vector<RenderMeshNode> m_main_camera_visible_mesh_nodes;
+        std::vector<RenderMeshNode> m_main_camera_visible_toon_mesh_nodes;
         RenderAxisNode              m_axis_node;
 
         // clear

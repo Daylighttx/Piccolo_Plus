@@ -51,6 +51,9 @@ namespace Piccolo
             auto object_space_transform = sub_mesh.m_transform.getMatrix();
 
             meshComponent.m_transform_desc.m_transform_matrix = object_space_transform;
+            meshComponent.m_is_toon_character                  = sub_mesh.m_is_toon_character;
+            meshComponent.m_toon_outline_width                 = sub_mesh.m_toon_outline_width;
+            meshComponent.m_toon_outline_color                 = sub_mesh.m_toon_outline_color;
 
             ++raw_mesh_count;
         }

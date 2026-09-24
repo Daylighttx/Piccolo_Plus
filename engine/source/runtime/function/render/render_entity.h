@@ -19,6 +19,9 @@ namespace Piccolo
         bool                   m_enable_vertex_blending {false};
         std::vector<Matrix4x4> m_joint_matrices;
         AxisAlignedBox         m_bounding_box;
+        bool                   m_is_toon_character {false};
+        float                  m_toon_outline_width {0.025f};
+        Vector4                m_toon_outline_color {0.015f, 0.02f, 0.03f, 1.0f};
 
         // material
         size_t  m_material_asset_id {0};

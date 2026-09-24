@@ -50,6 +50,7 @@ namespace Piccolo
         std::vector<RenderMeshNode>*              p_directional_light_visible_mesh_nodes {nullptr};
         std::vector<RenderMeshNode>*              p_point_lights_visible_mesh_nodes {nullptr};
         std::vector<RenderMeshNode>*              p_main_camera_visible_mesh_nodes {nullptr};
+        std::vector<RenderMeshNode>*              p_main_camera_visible_toon_mesh_nodes {nullptr};
         RenderAxisNode*                           p_axis_node {nullptr};
     };
 

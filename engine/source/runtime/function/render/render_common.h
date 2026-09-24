@@ -56,10 +56,11 @@ namespace Piccolo
     struct VulkanMeshInstance
     {
         float     enable_vertex_blending;
-        float     _padding_enable_vertex_blending_1;
+        float     toon_outline_width;
         float     _padding_enable_vertex_blending_2;
         float     _padding_enable_vertex_blending_3;
         Matrix4x4 model_matrix;
+        Vector4   toon_outline_color;
     };
 
     struct MeshPerdrawcallStorageBufferObject
@@ -238,6 +239,9 @@ namespace Piccolo
         VulkanPBRMaterial* ref_material {nullptr};
         uint32_t           node_id;
         bool               enable_vertex_blending {false};
+        bool               is_toon_character {false};
+        float              toon_outline_width {0.025f};
+        Vector4            toon_outline_color {0.015f, 0.02f, 0.03f, 1.0f};
     };
 
     struct RenderAxisNode

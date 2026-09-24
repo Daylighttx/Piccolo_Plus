@@ -14,6 +14,7 @@
 #include "runtime/function/render/interface/vulkan/vulkan_rhi.h"
 #include "runtime/function/render/interface/vulkan/vulkan_util.h"
 
+#include <algorithm>
 #include <map>
 #include <stdexcept>
 
@@ -26,6 +27,8 @@
 #include <mesh_vert.h>
 #include <skybox_frag.h>
 #include <skybox_vert.h>
+#include <toon_outline_frag.h>
+#include <toon_outline_vert.h>
 
 namespace Piccolo
 {
@@ -1249,6 +1252,124 @@ namespace Piccolo
             m_rhi->destroyShaderModule(frag_shader_module);
         }
 
+        // toon outline: draw an expanded back-face shell into the forward-lighting color target
+        {
+            RHIDescriptorSetLayout* descriptor_set_layouts[2] = {m_descriptor_infos[_mesh_global].layout,
+                                                                  m_descriptor_infos[_per_mesh].layout};
+            RHIPipelineLayoutCreateInfo pipeline_layout_create_info {};
+            pipeline_layout_create_info.sType          = RHI_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+            pipeline_layout_create_info.setLayoutCount = 2;
+            pipeline_layout_create_info.pSetLayouts    = descriptor_set_layouts;
+
+            if (m_rhi->createPipelineLayout(&pipeline_layout_create_info,
+                                            m_render_pipelines[_render_pipeline_type_toon_outline].layout) != RHI_SUCCESS)
+            {
+                throw std::runtime_error("create toon outline pipeline layout");
+            }
+
+            RHIShader* vert_shader_module = m_rhi->createShaderModule(TOON_OUTLINE_VERT);
+            RHIShader* frag_shader_module = m_rhi->createShaderModule(TOON_OUTLINE_FRAG);
+
+            RHIPipelineShaderStageCreateInfo shader_stages[2] {};
+            shader_stages[0].sType  = RHI_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            shader_stages[0].stage  = RHI_SHADER_STAGE_VERTEX_BIT;
+            shader_stages[0].module = vert_shader_module;
+            shader_stages[0].pName  = "main";
+            shader_stages[1].sType  = RHI_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            shader_stages[1].stage  = RHI_SHADER_STAGE_FRAGMENT_BIT;
+            shader_stages[1].module = frag_shader_module;
+            shader_stages[1].pName  = "main";
+
+            const auto vertex_binding_descriptions   = MeshVertex::getBindingDescriptions();
+            const auto vertex_attribute_descriptions = MeshVertex::getAttributeDescriptions();
+            RHIPipelineVertexInputStateCreateInfo vertex_input_state_create_info {};
+            vertex_input_state_create_info.sType = RHI_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+            vertex_input_state_create_info.vertexBindingDescriptionCount =
+                static_cast<uint32_t>(vertex_binding_descriptions.size());
+            vertex_input_state_create_info.pVertexBindingDescriptions = vertex_binding_descriptions.data();
+            vertex_input_state_create_info.vertexAttributeDescriptionCount =
+                static_cast<uint32_t>(vertex_attribute_descriptions.size());
+            vertex_input_state_create_info.pVertexAttributeDescriptions = vertex_attribute_descriptions.data();
+
+            RHIPipelineInputAssemblyStateCreateInfo input_assembly_create_info {};
+            input_assembly_create_info.sType                  = RHI_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+            input_assembly_create_info.topology               = RHI_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            input_assembly_create_info.primitiveRestartEnable = RHI_FALSE;
+
+            RHIPipelineViewportStateCreateInfo viewport_state_create_info {};
+            viewport_state_create_info.sType         = RHI_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+            viewport_state_create_info.viewportCount = 1;
+            viewport_state_create_info.pViewports    = m_rhi->getSwapchainInfo().viewport;
+            viewport_state_create_info.scissorCount  = 1;
+            viewport_state_create_info.pScissors     = m_rhi->getSwapchainInfo().scissor;
+
+            RHIPipelineRasterizationStateCreateInfo rasterization_state_create_info {};
+            rasterization_state_create_info.sType                   = RHI_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+            rasterization_state_create_info.depthClampEnable        = RHI_FALSE;
+            rasterization_state_create_info.rasterizerDiscardEnable = RHI_FALSE;
+            rasterization_state_create_info.polygonMode             = RHI_POLYGON_MODE_FILL;
+            rasterization_state_create_info.cullMode                = RHI_CULL_MODE_FRONT_BIT;
+            rasterization_state_create_info.frontFace               = RHI_FRONT_FACE_COUNTER_CLOCKWISE;
+            rasterization_state_create_info.depthBiasEnable         = RHI_FALSE;
+            rasterization_state_create_info.lineWidth               = 1.0f;
+
+            RHIPipelineMultisampleStateCreateInfo multisample_state_create_info {};
+            multisample_state_create_info.sType                = RHI_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+            multisample_state_create_info.sampleShadingEnable  = RHI_FALSE;
+            multisample_state_create_info.rasterizationSamples = RHI_SAMPLE_COUNT_1_BIT;
+
+            RHIPipelineColorBlendAttachmentState color_blend_attachment {};
+            color_blend_attachment.colorWriteMask = RHI_COLOR_COMPONENT_R_BIT | RHI_COLOR_COMPONENT_G_BIT |
+                                                     RHI_COLOR_COMPONENT_B_BIT | RHI_COLOR_COMPONENT_A_BIT;
+            color_blend_attachment.blendEnable = RHI_FALSE;
+
+            RHIPipelineColorBlendStateCreateInfo color_blend_state_create_info {};
+            color_blend_state_create_info.sType           = RHI_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+            color_blend_state_create_info.logicOpEnable   = RHI_FALSE;
+            color_blend_state_create_info.attachmentCount = 1;
+            color_blend_state_create_info.pAttachments    = &color_blend_attachment;
+
+            RHIPipelineDepthStencilStateCreateInfo depth_stencil_create_info {};
+            depth_stencil_create_info.sType            = RHI_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+            depth_stencil_create_info.depthTestEnable  = RHI_TRUE;
+            depth_stencil_create_info.depthWriteEnable = RHI_FALSE;
+            depth_stencil_create_info.depthCompareOp   = RHI_COMPARE_OP_LESS;
+            depth_stencil_create_info.stencilTestEnable = RHI_FALSE;
+
+            RHIDynamicState dynamic_states[2] = {RHI_DYNAMIC_STATE_VIEWPORT, RHI_DYNAMIC_STATE_SCISSOR};
+            RHIPipelineDynamicStateCreateInfo dynamic_state_create_info {};
+            dynamic_state_create_info.sType             = RHI_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+            dynamic_state_create_info.dynamicStateCount = 2;
+            dynamic_state_create_info.pDynamicStates    = dynamic_states;
+
+            RHIGraphicsPipelineCreateInfo pipeline_info {};
+            pipeline_info.sType               = RHI_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+            pipeline_info.stageCount          = 2;
+            pipeline_info.pStages             = shader_stages;
+            pipeline_info.pVertexInputState   = &vertex_input_state_create_info;
+            pipeline_info.pInputAssemblyState = &input_assembly_create_info;
+            pipeline_info.pViewportState      = &viewport_state_create_info;
+            pipeline_info.pRasterizationState = &rasterization_state_create_info;
+            pipeline_info.pMultisampleState   = &multisample_state_create_info;
+            pipeline_info.pColorBlendState    = &color_blend_state_create_info;
+            pipeline_info.pDepthStencilState  = &depth_stencil_create_info;
+            pipeline_info.pDynamicState       = &dynamic_state_create_info;
+            pipeline_info.layout              = m_render_pipelines[_render_pipeline_type_toon_outline].layout;
+            pipeline_info.renderPass          = m_framebuffer.render_pass;
+            pipeline_info.subpass             = _main_camera_subpass_forward_lighting;
+
+            if (m_rhi->createGraphicsPipelines(RHI_NULL_HANDLE,
+                                               1,
+                                               &pipeline_info,
+                                               m_render_pipelines[_render_pipeline_type_toon_outline].pipeline) != RHI_SUCCESS)
+            {
+                throw std::runtime_error("create toon outline graphics pipeline");
+            }
+
+            m_rhi->destroyShaderModule(vert_shader_module);
+            m_rhi->destroyShaderModule(frag_shader_module);
+        }
+
         // skybox
         {
             RHIDescriptorSetLayout*      descriptorset_layouts[1] = {m_descriptor_infos[_skybox].layout};
@@ -1972,6 +2093,7 @@ namespace Piccolo
 
         m_rhi->pushEvent(m_rhi->getCurrentCommandBuffer(), "Forward Lighting", color);
 
+        drawToonOutline();
         particle_pass.draw();
 
         m_rhi->popEvent(m_rhi->getCurrentCommandBuffer());
@@ -2061,6 +2183,7 @@ namespace Piccolo
 
         drawMeshLighting();
         drawSkybox();
+        drawToonOutline();
         particle_pass.draw();
 
         m_rhi->popEvent(m_rhi->getCurrentCommandBuffer());
@@ -2263,16 +2386,16 @@ namespace Piccolo
 
                         // per drawcall vertex blending storage buffer
                         uint32_t per_drawcall_vertex_blending_dynamic_offset;
-                        bool     least_one_enable_vertex_blending = true;
+                        bool     any_instance_uses_vertex_blending = false;
                         for (uint32_t i = 0; i < current_instance_count; ++i)
                         {
-                            if (!mesh_nodes[drawcall_max_instance_count * drawcall_index + i].joint_matrices)
+                            if (mesh_nodes[drawcall_max_instance_count * drawcall_index + i].joint_matrices)
                             {
-                                least_one_enable_vertex_blending = false;
+                                any_instance_uses_vertex_blending = true;
                                 break;
                             }
                         }
-                        if (least_one_enable_vertex_blending)
+                        if (any_instance_uses_vertex_blending)
                         {
                             per_drawcall_vertex_blending_dynamic_offset =
                                 roundUp(m_global_render_resource->_storage_buffer
@@ -2343,9 +2466,197 @@ namespace Piccolo
         m_rhi->popEvent(m_rhi->getCurrentCommandBuffer());
     }
 
-    // 延迟光照阶段：绑定一张“全屏三角形”管线，片段着色器(deferred_lighting_frag)直接采样上一 subpass 的
-    // GBuffer input attachments（法线/金属粗糙/Albedo/深度）+ 逐帧光照 uniform，算出最终 HDR 颜色写入 backup_odd。
-    // 光照与物体数量解耦——这是你将来加“程序化全屏特效/自定义管线”最该动手的地方。
+    // Draw the expanded back-face shells of the visible Toon subset in the forward-lighting subpass.
+    void MainCameraPass::drawToonOutline()
+    {
+        struct OutlineMeshNode
+        {
+            const Matrix4x4* model_matrix {nullptr};
+            const Matrix4x4* joint_matrices {nullptr};
+            uint32_t         joint_count {0};
+            float            outline_width {0.025f};
+            Vector4          outline_color {0.015f, 0.02f, 0.03f, 1.0f};
+        };
+
+        const auto* visible_toon_nodes = m_visiable_nodes.p_main_camera_visible_toon_mesh_nodes;
+        if (visible_toon_nodes == nullptr || visible_toon_nodes->empty())
+        {
+            return;
+        }
+
+        std::map<VulkanMesh*, std::vector<OutlineMeshNode>> drawcall_batches;
+        for (const RenderMeshNode& node : *visible_toon_nodes)
+        {
+            OutlineMeshNode outline_node;
+            outline_node.model_matrix = node.model_matrix;
+            outline_node.outline_width = node.toon_outline_width;
+            outline_node.outline_color = node.toon_outline_color;
+            if (node.enable_vertex_blending)
+            {
+                outline_node.joint_matrices = node.joint_matrices;
+                outline_node.joint_count    = node.joint_count;
+            }
+            drawcall_batches[node.ref_mesh].push_back(outline_node);
+        }
+
+        const float event_color[4] = {0.12f, 0.32f, 0.95f, 1.0f};
+        m_rhi->pushEvent(m_rhi->getCurrentCommandBuffer(), "Toon Outline", event_color);
+
+        m_rhi->cmdBindPipelinePFN(m_rhi->getCurrentCommandBuffer(),
+                                  RHI_PIPELINE_BIND_POINT_GRAPHICS,
+                                  m_render_pipelines[_render_pipeline_type_toon_outline].pipeline);
+        m_rhi->cmdSetViewportPFN(m_rhi->getCurrentCommandBuffer(), 0, 1, m_rhi->getSwapchainInfo().viewport);
+        m_rhi->cmdSetScissorPFN(m_rhi->getCurrentCommandBuffer(), 0, 1, m_rhi->getSwapchainInfo().scissor);
+
+        const uint32_t perframe_dynamic_offset =
+            roundUp(m_global_render_resource->_storage_buffer
+                        ._global_upload_ringbuffers_end[m_rhi->getCurrentFrameIndex()],
+                    m_global_render_resource->_storage_buffer._min_storage_buffer_offset_alignment);
+        m_global_render_resource->_storage_buffer._global_upload_ringbuffers_end[m_rhi->getCurrentFrameIndex()] =
+            perframe_dynamic_offset + sizeof(MeshPerframeStorageBufferObject);
+        assert(m_global_render_resource->_storage_buffer
+                   ._global_upload_ringbuffers_end[m_rhi->getCurrentFrameIndex()] <=
+               m_global_render_resource->_storage_buffer
+                       ._global_upload_ringbuffers_begin[m_rhi->getCurrentFrameIndex()] +
+                   m_global_render_resource->_storage_buffer
+                       ._global_upload_ringbuffers_size[m_rhi->getCurrentFrameIndex()]);
+        *reinterpret_cast<MeshPerframeStorageBufferObject*>(
+            reinterpret_cast<uintptr_t>(
+                m_global_render_resource->_storage_buffer._global_upload_ringbuffer_memory_pointer) +
+            perframe_dynamic_offset) = m_mesh_perframe_storage_buffer_object;
+
+        constexpr uint32_t max_instance_count =
+            sizeof(MeshPerdrawcallStorageBufferObject::mesh_instances) /
+            sizeof(MeshPerdrawcallStorageBufferObject::mesh_instances[0]);
+
+        for (auto& [mesh_pointer, mesh_nodes] : drawcall_batches)
+        {
+            VulkanMesh& mesh = *mesh_pointer;
+
+            m_rhi->cmdBindDescriptorSetsPFN(m_rhi->getCurrentCommandBuffer(),
+                                            RHI_PIPELINE_BIND_POINT_GRAPHICS,
+                                            m_render_pipelines[_render_pipeline_type_toon_outline].layout,
+                                            1,
+                                            1,
+                                            &mesh.mesh_vertex_blending_descriptor_set,
+                                            0,
+                                            nullptr);
+
+            RHIBuffer* vertex_buffers[3] = {mesh.mesh_vertex_position_buffer,
+                                            mesh.mesh_vertex_varying_enable_blending_buffer,
+                                            mesh.mesh_vertex_varying_buffer};
+            RHIDeviceSize vertex_offsets[3] = {0, 0, 0};
+            m_rhi->cmdBindVertexBuffersPFN(m_rhi->getCurrentCommandBuffer(),
+                                           0,
+                                           3,
+                                           vertex_buffers,
+                                           vertex_offsets);
+            m_rhi->cmdBindIndexBufferPFN(m_rhi->getCurrentCommandBuffer(),
+                                         mesh.mesh_index_buffer,
+                                         0,
+                                         RHI_INDEX_TYPE_UINT16);
+
+            const uint32_t total_instance_count = static_cast<uint32_t>(mesh_nodes.size());
+            const uint32_t drawcall_count = roundUp(total_instance_count, max_instance_count) / max_instance_count;
+
+            for (uint32_t drawcall_index = 0; drawcall_index < drawcall_count; ++drawcall_index)
+            {
+                const uint32_t first_instance = max_instance_count * drawcall_index;
+                const uint32_t current_instance_count =
+                    std::min(max_instance_count, total_instance_count - first_instance);
+
+                const uint32_t perdrawcall_dynamic_offset =
+                    roundUp(m_global_render_resource->_storage_buffer
+                                ._global_upload_ringbuffers_end[m_rhi->getCurrentFrameIndex()],
+                            m_global_render_resource->_storage_buffer._min_storage_buffer_offset_alignment);
+                m_global_render_resource->_storage_buffer
+                    ._global_upload_ringbuffers_end[m_rhi->getCurrentFrameIndex()] =
+                    perdrawcall_dynamic_offset + sizeof(MeshPerdrawcallStorageBufferObject);
+                assert(m_global_render_resource->_storage_buffer
+                           ._global_upload_ringbuffers_end[m_rhi->getCurrentFrameIndex()] <=
+                       m_global_render_resource->_storage_buffer
+                               ._global_upload_ringbuffers_begin[m_rhi->getCurrentFrameIndex()] +
+                           m_global_render_resource->_storage_buffer
+                               ._global_upload_ringbuffers_size[m_rhi->getCurrentFrameIndex()]);
+
+                auto& perdrawcall_data = *reinterpret_cast<MeshPerdrawcallStorageBufferObject*>(
+                    reinterpret_cast<uintptr_t>(
+                        m_global_render_resource->_storage_buffer._global_upload_ringbuffer_memory_pointer) +
+                    perdrawcall_dynamic_offset);
+
+                bool any_instance_uses_skinning = false;
+                for (uint32_t instance_index = 0; instance_index < current_instance_count; ++instance_index)
+                {
+                    const OutlineMeshNode& node = mesh_nodes[first_instance + instance_index];
+                    perdrawcall_data.mesh_instances[instance_index].model_matrix = *node.model_matrix;
+                    perdrawcall_data.mesh_instances[instance_index].enable_vertex_blending =
+                        node.joint_matrices != nullptr ? 1.0f : -1.0f;
+                    perdrawcall_data.mesh_instances[instance_index].toon_outline_width = node.outline_width;
+                    perdrawcall_data.mesh_instances[instance_index].toon_outline_color = node.outline_color;
+                    any_instance_uses_skinning = any_instance_uses_skinning || node.joint_matrices != nullptr;
+                }
+
+                uint32_t vertex_blending_dynamic_offset = 0;
+                if (any_instance_uses_skinning)
+                {
+                    vertex_blending_dynamic_offset =
+                        roundUp(m_global_render_resource->_storage_buffer
+                                    ._global_upload_ringbuffers_end[m_rhi->getCurrentFrameIndex()],
+                                m_global_render_resource->_storage_buffer._min_storage_buffer_offset_alignment);
+                    m_global_render_resource->_storage_buffer
+                        ._global_upload_ringbuffers_end[m_rhi->getCurrentFrameIndex()] =
+                        vertex_blending_dynamic_offset + sizeof(MeshPerdrawcallVertexBlendingStorageBufferObject);
+                    assert(m_global_render_resource->_storage_buffer
+                               ._global_upload_ringbuffers_end[m_rhi->getCurrentFrameIndex()] <=
+                           m_global_render_resource->_storage_buffer
+                                   ._global_upload_ringbuffers_begin[m_rhi->getCurrentFrameIndex()] +
+                               m_global_render_resource->_storage_buffer
+                                   ._global_upload_ringbuffers_size[m_rhi->getCurrentFrameIndex()]);
+
+                    auto& vertex_blending_data =
+                        *reinterpret_cast<MeshPerdrawcallVertexBlendingStorageBufferObject*>(
+                            reinterpret_cast<uintptr_t>(m_global_render_resource->_storage_buffer
+                                                            ._global_upload_ringbuffer_memory_pointer) +
+                            vertex_blending_dynamic_offset);
+
+                    for (uint32_t instance_index = 0; instance_index < current_instance_count; ++instance_index)
+                    {
+                        const OutlineMeshNode& node = mesh_nodes[first_instance + instance_index];
+                        for (uint32_t joint_index = 0; joint_index < node.joint_count; ++joint_index)
+                        {
+                            vertex_blending_data
+                                .joint_matrices[s_mesh_vertex_blending_max_joint_count * instance_index + joint_index] =
+                                node.joint_matrices[joint_index];
+                        }
+                    }
+                }
+
+                const uint32_t dynamic_offsets[3] = {perframe_dynamic_offset,
+                                                      perdrawcall_dynamic_offset,
+                                                      vertex_blending_dynamic_offset};
+                m_rhi->cmdBindDescriptorSetsPFN(m_rhi->getCurrentCommandBuffer(),
+                                                RHI_PIPELINE_BIND_POINT_GRAPHICS,
+                                                m_render_pipelines[_render_pipeline_type_toon_outline].layout,
+                                                0,
+                                                1,
+                                                &m_descriptor_infos[_mesh_global].descriptor_set,
+                                                3,
+                                                dynamic_offsets);
+
+                m_rhi->cmdDrawIndexedPFN(m_rhi->getCurrentCommandBuffer(),
+                                         mesh.mesh_index_count,
+                                         current_instance_count,
+                                         0,
+                                         0,
+                                         0);
+            }
+        }
+
+        m_rhi->popEvent(m_rhi->getCurrentCommandBuffer());
+    }
+
+    // Deferred lighting draws a fullscreen triangle, reads the GBuffer input attachments, and writes HDR color.
+    // Its cost is largely independent of mesh count, so this is also the natural insertion area for fullscreen effects.
     void MainCameraPass::drawDeferredLighting()
     {
         m_rhi->cmdBindPipelinePFN(m_rhi->getCurrentCommandBuffer(),
@@ -2538,16 +2849,16 @@ namespace Piccolo
 
                         // per drawcall vertex blending storage buffer
                         uint32_t per_drawcall_vertex_blending_dynamic_offset;
-                        bool     least_one_enable_vertex_blending = true;
+                        bool     any_instance_uses_vertex_blending = false;
                         for (uint32_t i = 0; i < current_instance_count; ++i)
                         {
-                            if (!mesh_nodes[drawcall_max_instance_count * drawcall_index + i].joint_matrices)
+                            if (mesh_nodes[drawcall_max_instance_count * drawcall_index + i].joint_matrices)
                             {
-                                least_one_enable_vertex_blending = false;
+                                any_instance_uses_vertex_blending = true;
                                 break;
                             }
                         }
-                        if (least_one_enable_vertex_blending)
+                        if (any_instance_uses_vertex_blending)
                         {
                             per_drawcall_vertex_blending_dynamic_offset =
                                 roundUp(m_global_render_resource->_storage_buffer

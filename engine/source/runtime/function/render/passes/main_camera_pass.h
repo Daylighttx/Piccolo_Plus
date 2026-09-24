@@ -54,6 +54,7 @@ namespace Piccolo
             _render_pipeline_type_mesh_gbuffer = 0,
             _render_pipeline_type_deferred_lighting,
             _render_pipeline_type_mesh_lighting,
+            _render_pipeline_type_toon_outline,
             _render_pipeline_type_skybox,
             _render_pipeline_type_axis,
             _render_pipeline_type_particle,
@@ -116,6 +117,7 @@ namespace Piccolo
         void drawMeshGbuffer();
         void drawDeferredLighting();
         void drawMeshLighting();
+        void drawToonOutline();
         void drawSkybox();
         void drawAxis();
 

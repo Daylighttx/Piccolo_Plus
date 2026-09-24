@@ -3,6 +3,14 @@
 #include "runtime/core/base/macro.h"
 #include "runtime/core/meta/reflection/reflection_register.h"
 
+#if defined(_WIN32)
+#    include "runtime/core/base/renderdoc_app.h"
+#    include <cstdlib>
+
+extern "C" __declspec(dllimport) void* __stdcall GetModuleHandleA(const char* module_name);
+extern "C" __declspec(dllimport) void* __stdcall GetProcAddress(void* module, const char* procedure_name);
+#endif
+
 #include "runtime/function/framework/world/world_manager.h"
 #include "runtime/function/global/global_context.h"
 #include "runtime/function/input/input_system.h"
@@ -15,6 +23,59 @@
 
 namespace Piccolo
 {
+    namespace
+    {
+#if defined(_WIN32)
+        RENDERDOC_API_1_1_2* beginRenderDocCaptureIfRequested(int frame_count)
+        {
+            const char* requested_frame_text = std::getenv("PICCOLO_RENDERDOC_CAPTURE_FRAME");
+            if (requested_frame_text == nullptr)
+            {
+                return nullptr;
+            }
+
+            char*      parse_end       = nullptr;
+            const long requested_frame = std::strtol(requested_frame_text, &parse_end, 10);
+            if (parse_end == requested_frame_text || *parse_end != '\0' || requested_frame <= 0 ||
+                frame_count != requested_frame)
+            {
+                return nullptr;
+            }
+
+            void* renderdoc_module = GetModuleHandleA("renderdoc.dll");
+            if (renderdoc_module == nullptr)
+            {
+                LOG_WARN("RenderDoc capture requested for frame {}, but renderdoc.dll is not loaded", frame_count);
+                return nullptr;
+            }
+
+            const auto get_renderdoc_api = reinterpret_cast<pRENDERDOC_GetAPI>(
+                GetProcAddress(renderdoc_module, "RENDERDOC_GetAPI"));
+            RENDERDOC_API_1_1_2* renderdoc_api = nullptr;
+            if (get_renderdoc_api == nullptr ||
+                get_renderdoc_api(eRENDERDOC_API_Version_1_1_2,
+                                  reinterpret_cast<void**>(&renderdoc_api)) != 1 ||
+                renderdoc_api == nullptr)
+            {
+                LOG_WARN("RenderDoc capture requested for frame {}, but the in-application API is unavailable",
+                         frame_count);
+                return nullptr;
+            }
+
+            if (const char* capture_file = std::getenv("PICCOLO_RENDERDOC_CAPTURE_FILE"))
+            {
+                renderdoc_api->SetCaptureFilePathTemplate(capture_file);
+            }
+
+            renderdoc_api->StartFrameCapture(nullptr, nullptr);
+            LOG_INFO("RenderDoc capture start requested for frame {}: active={}",
+                     frame_count,
+                     renderdoc_api->IsFrameCapturing());
+            return renderdoc_api;
+        }
+#endif
+    } // namespace
+
     bool                            g_is_editor_mode {false};
     std::unordered_set<std::string> g_editor_tick_component_types {};
 
@@ -78,12 +139,23 @@ namespace Piccolo
 
         calculateFPS(delta_time);
 
+#if defined(_WIN32)
+        RENDERDOC_API_1_1_2* renderdoc_capture = beginRenderDocCaptureIfRequested(m_frame_count);
+#endif
+
         // single thread
         // exchange data between logic and render contexts
         g_runtime_global_context.m_render_system->swapLogicRenderData();
 
         steady_clock::time_point render_begin = steady_clock::now();
         rendererTick(delta_time);
+#if defined(_WIN32)
+        if (renderdoc_capture != nullptr)
+        {
+            const uint32_t capture_saved = renderdoc_capture->EndFrameCapture(nullptr, nullptr);
+            LOG_INFO("RenderDoc capture end requested for frame {}: saved={}", m_frame_count, capture_saved);
+        }
+#endif
         steady_clock::time_point render_end = steady_clock::now();
 
         float render_ms = duration<float, std::milli>(render_end - render_begin).count();

@@ -1,0 +1,119 @@
+RenderDoc analysis script started
+API: Vulkan
+[13] => vkQueueSubmit(1)[0]: vkBeginCommandBuffer(ResourceId::2191)
+[14] vkCmdBeginRenderPass(C=Clear, D=Clear)
+[15] Directional Light Shadow
+  [16] Mesh
+    [22] vkCmdDrawIndexed()
+    [27] vkCmdDrawIndexed()
+    [32] vkCmdDrawIndexed()
+    [37] vkCmdDrawIndexed()
+    [42] vkCmdDrawIndexed()
+    [47] vkCmdDrawIndexed()
+    [52] vkCmdDrawIndexed()
+    [57] vkCmdDrawIndexed()
+    [58] vkCmdEndDebugUtilsLabelEXT()
+  [59] vkCmdEndDebugUtilsLabelEXT()
+[60] vkCmdEndRenderPass(C=Store, D=Don't Care)
+[61] Point Light Shadow
+  [62] vkCmdBeginRenderPass(C=Clear, D=Clear)
+  [63] Mesh
+    [69] vkCmdDrawIndexed()
+    [74] vkCmdDrawIndexed()
+    [79] vkCmdDrawIndexed()
+    [80] vkCmdEndDebugUtilsLabelEXT()
+  [81] vkCmdEndRenderPass(C=Store, D=Don't Care)
+  [82] vkCmdEndDebugUtilsLabelEXT()
+[83] vkCmdBeginRenderPass(C=Clear, D=Clear)
+[84] BasePass
+  [85] Mesh GBuffer
+    [94] vkCmdDrawIndexed()
+    [99] vkCmdDrawIndexed()
+    [104] vkCmdDrawIndexed()
+    [109] vkCmdDrawIndexed()
+    [114] vkCmdDrawIndexed()
+    [120] vkCmdDrawIndexed()
+    [126] vkCmdDrawIndexed()
+    [132] vkCmdDrawIndexed()
+    [133] vkCmdEndDebugUtilsLabelEXT()
+  [134] vkCmdEndDebugUtilsLabelEXT()
+[135] vkCmdNextSubpass() => 1
+[136] Deferred Lighting
+  [141] vkCmdDraw()
+  [142] vkCmdEndDebugUtilsLabelEXT()
+[143] vkCmdNextSubpass() => 2
+[144] Forward Lighting
+  [145] Toon Outline
+    [153] vkCmdDrawIndexed()
+    [154] vkCmdEndDebugUtilsLabelEXT()
+  [155] ParticleBillboard
+    [160] vkCmdDraw()
+    [161] vkCmdEndDebugUtilsLabelEXT()
+  [162] vkCmdEndDebugUtilsLabelEXT()
+[163] vkCmdNextSubpass() => 3
+[164] Tone Map
+  [169] vkCmdDraw()
+  [170] vkCmdEndDebugUtilsLabelEXT()
+[171] vkCmdNextSubpass() => 4
+[172] Color Grading
+  [177] vkCmdDraw()
+  [178] vkCmdEndDebugUtilsLabelEXT()
+[179] vkCmdNextSubpass() => 5
+[180] vkCmdNextSubpass() => 6
+[181] vkCmdClearAttachments()
+[182] ImGUI
+  [191] vkCmdDrawIndexed()
+  [193] vkCmdDrawIndexed()
+  [195] vkCmdDrawIndexed()
+  [197] vkCmdDrawIndexed()
+  [199] vkCmdDrawIndexed()
+  [201] vkCmdDrawIndexed()
+  [203] vkCmdDrawIndexed()
+  [205] vkCmdDrawIndexed()
+  [207] vkCmdDrawIndexed()
+  [209] vkCmdDrawIndexed()
+  [211] vkCmdEndDebugUtilsLabelEXT()
+[212] vkCmdNextSubpass() => 7
+[213] Combine UI
+  [218] vkCmdDraw()
+  [219] vkCmdEndDebugUtilsLabelEXT()
+[220] vkCmdEndRenderPass(Store)
+[221] DebugDrawManager
+  [224] vkCmdBeginRenderPass(C=Load, D=Load)
+  [226] vkCmdEndRenderPass(C=Store, D=Store)
+  [227] vkCmdBeginRenderPass(C=Load, D=Load)
+  [229] vkCmdEndRenderPass(C=Store, D=Store)
+  [230] vkCmdEndDebugUtilsLabelEXT()
+[231] => vkQueueSubmit(1)[0]: vkEndCommandBuffer(ResourceId::2191)
+[232] vkQueuePresentKHR(ResourceId::125)
+[236] => vkQueueSubmit(1)[0]: vkBeginCommandBuffer(ResourceId::2198)
+[237] Copy Depth Image for Particle
+  [240] vkCmdCopyImage()
+  [243] vkCmdEndDebugUtilsLabelEXT()
+[244] Copy Normal Image for Particle
+  [247] vkCmdCopyImage()
+  [250] vkCmdEndDebugUtilsLabelEXT()
+[251] => vkQueueSubmit(1)[0]: vkEndCommandBuffer(ResourceId::2198)
+[253] End of Capture
+
+=== Toon Outline draw state ===
+Event ID: 153; Action ID: 21
+Draw: vkCmdDrawIndexed(); indices/vertices=55500; instances=1; firstIndex=0; baseVertex=0; instanceOffset=0
+Graphics pipeline resource: ResourceId::296
+Topology: TriangleList
+Raster: fill=Solid; cull=Front; frontCCW=True
+Depth: test=True; write=False; compare=Less
+Index buffer: resource=ResourceId::615; offset=0; stride=2; size=whole buffer
+Vertex buffer[0]: resource=ResourceId::595; stride=12; offset=0; size=whole buffer
+Vertex buffer[1]: resource=ResourceId::596; stride=24; offset=0; size=whole buffer
+Vertex buffer[2]: resource=ResourceId::597; stride=8; offset=0; size=whole buffer
+Vertex input: name=in_position; used=True; slot=0; offset=0; perInstance=False; format=R32G32B32_FLOAT
+Vertex input: name=in_normal; used=True; slot=1; offset=0; perInstance=False; format=R32G32B32_FLOAT
+Vertex input: name=attr2; used=True; slot=1; offset=12; perInstance=False; format=R32G32B32_FLOAT
+Vertex input: name=attr3; used=True; slot=2; offset=0; perInstance=False; format=R32G32_FLOAT
+Descriptor access: stage=0; reflectedIndex=0; type=9; store=ResourceId::305; accessOffset=0; accessSize=1; staticallyUnused=False; resource=ResourceId::148; descriptorOffset=93792288; descriptorSize=688
+Descriptor access: stage=0; reflectedIndex=1; type=9; store=ResourceId::305; accessOffset=1; accessSize=1; staticallyUnused=False; resource=ResourceId::148; descriptorOffset=93792976; descriptorSize=6144
+Descriptor access: stage=0; reflectedIndex=2; type=9; store=ResourceId::305; accessOffset=2; accessSize=1; staticallyUnused=False; resource=ResourceId::148; descriptorOffset=0; descriptorSize=4194304
+Descriptor access: stage=0; reflectedIndex=3; type=9; store=ResourceId::611; accessOffset=0; accessSize=1; staticallyUnused=False; resource=ResourceId::598; descriptorOffset=0; descriptorSize=1776000
+Vulkan pass: subpass=2; cullMode=Front; depthTest=True; depthWrite=False; depthCompare=Less
+RenderDoc analysis script finished

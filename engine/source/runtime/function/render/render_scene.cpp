@@ -24,6 +24,8 @@ namespace Piccolo
         RenderPass::m_visiable_nodes.p_directional_light_visible_mesh_nodes = &m_directional_light_visible_mesh_nodes;
         RenderPass::m_visiable_nodes.p_point_lights_visible_mesh_nodes      = &m_point_lights_visible_mesh_nodes;
         RenderPass::m_visiable_nodes.p_main_camera_visible_mesh_nodes       = &m_main_camera_visible_mesh_nodes;
+        RenderPass::m_visiable_nodes.p_main_camera_visible_toon_mesh_nodes  =
+            &m_main_camera_visible_toon_mesh_nodes;
         RenderPass::m_visiable_nodes.p_axis_node                            = &m_axis_node;
     }
 
@@ -122,7 +124,6 @@ namespace Piccolo
                 VulkanMesh& mesh_asset           = render_resource->getEntityMesh(entity);
                 temp_node.ref_mesh               = &mesh_asset;
                 temp_node.enable_vertex_blending = entity.m_enable_vertex_blending;
-
                 VulkanPBRMaterial& material_asset = render_resource->getEntityMaterial(entity);
                 temp_node.ref_material            = &material_asset;
             }
@@ -176,7 +177,6 @@ namespace Piccolo
                 VulkanMesh& mesh_asset           = render_resource->getEntityMesh(entity);
                 temp_node.ref_mesh               = &mesh_asset;
                 temp_node.enable_vertex_blending = entity.m_enable_vertex_blending;
-
                 VulkanPBRMaterial& material_asset = render_resource->getEntityMaterial(entity);
                 temp_node.ref_material            = &material_asset;
             }
@@ -187,6 +187,7 @@ namespace Piccolo
                                                      std::shared_ptr<RenderCamera>   camera)
     {
         m_main_camera_visible_mesh_nodes.clear();
+        m_main_camera_visible_toon_mesh_nodes.clear();
 
         Matrix4x4 view_matrix      = camera->getViewMatrix();
         Matrix4x4 proj_matrix      = camera->getPersProjMatrix();
@@ -216,9 +217,17 @@ namespace Piccolo
                 VulkanMesh& mesh_asset           = render_resource->getEntityMesh(entity);
                 temp_node.ref_mesh               = &mesh_asset;
                 temp_node.enable_vertex_blending = entity.m_enable_vertex_blending;
+                temp_node.is_toon_character      = entity.m_is_toon_character;
+                temp_node.toon_outline_width     = entity.m_toon_outline_width;
+                temp_node.toon_outline_color     = entity.m_toon_outline_color;
 
                 VulkanPBRMaterial& material_asset = render_resource->getEntityMaterial(entity);
                 temp_node.ref_material            = &material_asset;
+
+                if (temp_node.is_toon_character)
+                {
+                    m_main_camera_visible_toon_mesh_nodes.push_back(temp_node);
+                }
             }
         }
     }

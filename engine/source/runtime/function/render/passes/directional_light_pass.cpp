@@ -606,16 +606,16 @@ namespace Piccolo
 
                             // per drawcall vertex blending storage buffer
                             uint32_t per_drawcall_vertex_blending_dynamic_offset;
-                            bool     least_one_enable_vertex_blending = true;
+                            bool     any_instance_uses_vertex_blending = false;
                             for (uint32_t i = 0; i < current_instance_count; ++i)
                             {
-                                if (!mesh_nodes[drawcall_max_instance_count * drawcall_index + i].joint_matrices)
+                                if (mesh_nodes[drawcall_max_instance_count * drawcall_index + i].joint_matrices)
                                 {
-                                    least_one_enable_vertex_blending = false;
+                                    any_instance_uses_vertex_blending = true;
                                     break;
                                 }
                             }
-                            if (least_one_enable_vertex_blending)
+                            if (any_instance_uses_vertex_blending)
                             {
                                 per_drawcall_vertex_blending_dynamic_offset = roundUp(
                                     m_global_render_resource->_storage_buffer

@@ -340,6 +340,9 @@ namespace Piccolo
                     render_entity.m_instance_id =
                         static_cast<uint32_t>(m_render_scene->getInstanceIdAllocator().allocGuid(part_id));
                     render_entity.m_model_matrix = game_object_part.m_transform_desc.m_transform_matrix;
+                    render_entity.m_is_toon_character = game_object_part.m_is_toon_character;
+                    render_entity.m_toon_outline_width = game_object_part.m_toon_outline_width;
+                    render_entity.m_toon_outline_color = game_object_part.m_toon_outline_color;
 
                     m_render_scene->addInstanceIdToMap(render_entity.m_instance_id, gobject.getId());
 
