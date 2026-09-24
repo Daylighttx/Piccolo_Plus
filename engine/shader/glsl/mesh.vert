@@ -4,6 +4,7 @@
 
 #include "constants.h"
 #include "structures.h"
+#include "gbuffer.h"
 
 struct DirectionalLight
 {
@@ -60,11 +61,13 @@ layout(location = 0) out vec3 out_world_position; // output in framebuffer 0 for
 layout(location = 1) out vec3 out_normal;
 layout(location = 2) out vec3 out_tangent;
 layout(location = 3) out vec2 out_texcoord;
+layout(location = 4) flat out highp uint out_shading_model_id;
 
 void main()
 {
     highp mat4  model_matrix           = mesh_instances[gl_InstanceIndex].model_matrix;
     highp float enable_vertex_blending = mesh_instances[gl_InstanceIndex].enable_vertex_blending;
+    highp float toon_shading_enabled   = mesh_instances[gl_InstanceIndex].toon_shading_enabled;
 
     highp vec3 model_position;
     highp vec3 model_normal;
@@ -126,4 +129,5 @@ void main()
     out_tangent           = normalize(tangent_matrix * model_tangent);
 
     out_texcoord = in_texcoord;
+    out_shading_model_id = toon_shading_enabled > 0.0 ? SHADINGMODELID_TOON_LIT : SHADINGMODELID_DEFAULT_LIT;
 }

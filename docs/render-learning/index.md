@@ -44,6 +44,7 @@ features:
 | A03 | 添加支持蒙皮的倒壳描边 Pipeline | 已完成 |
 | A04 | 将每个角色的描边宽度和颜色送入 GPU | 已完成 |
 | A05 | 用 RenderDoc 验证 Event、Pipeline、Descriptor 和 Draw | 已完成：捕获报告可复现；逐像素检查留待后续 |
+| A06 | 让 Toon 角色的方向光漫反射分成 3 个色阶 | 已实现；Release 构建、启动与 GBuffer→Deferred→Outline 捕获顺序已验证；像素级明暗效果待核 |
 
 ::: tip 阅读建议
 第一次按顺序阅读并亲手复现；第二次从右侧目录随机定位概念；遇到错误时先查每章末尾的排错表。
@@ -51,4 +52,4 @@ features:
 
 ## 下一章
 
-[A05：用 RenderDoc 把 Draw Call 和 Vulkan 管线逐项对上](/lessons/A05-renderdoc-capture)
+[A06：从 GBuffer 开始做 Toon 明暗分阶](/lessons/A06-toon-lighting-bands)

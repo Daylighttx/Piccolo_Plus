@@ -57,7 +57,7 @@ namespace Piccolo
     {
         float     enable_vertex_blending;
         float     toon_outline_width;
-        float     _padding_enable_vertex_blending_2;
+        float     toon_shading_enabled;
         float     _padding_enable_vertex_blending_3;
         Matrix4x4 model_matrix;
         Vector4   toon_outline_color;

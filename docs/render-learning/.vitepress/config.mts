@@ -40,6 +40,13 @@ export default defineConfig({
           { text: 'A04 · 描边参数进入 GPU', link: '/lessons/A04-toon-outline-parameters' },
           { text: 'A05 · RenderDoc 核验 Draw 与管线', link: '/lessons/A05-renderdoc-capture' }
         ]
+      },
+      {
+        text: '第二阶段 · Toon 光照',
+        collapsed: false,
+        items: [
+          { text: 'A06 · Toon 明暗分阶与 GBuffer', link: '/lessons/A06-toon-lighting-bands' }
+        ]
       }
     ],
     outline: { level: [2, 3], label: '本页目录' },

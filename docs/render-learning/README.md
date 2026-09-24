@@ -26,6 +26,7 @@ cd bin
 4. [A03：第一个蒙皮倒壳描边 Pipeline](lessons/A03-toon-outline-pipeline.md)
 5. [A04：把描边参数从资产送进 GPU](lessons/A04-toon-outline-parameters.md)
 6. [A05：用 RenderDoc 核验 Event、Pipeline、Descriptor 和 Draw](lessons/A05-renderdoc-capture.md)
+7. [A06：从 GBuffer 开始做 Toon 明暗分阶](lessons/A06-toon-lighting-bands.md)
 
 ## 每章统一验收等级
 

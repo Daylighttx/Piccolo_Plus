@@ -2244,6 +2244,7 @@ namespace Piccolo
             const Matrix4x4* model_matrix {nullptr};
             const Matrix4x4* joint_matrices {nullptr};
             uint32_t         joint_count {0};
+            bool             is_toon_character {false};
         };
 
         std::map<VulkanPBRMaterial*, std::map<VulkanMesh*, std::vector<MeshNode>>> main_camera_mesh_drawcall_batch;
@@ -2256,6 +2257,7 @@ namespace Piccolo
 
             MeshNode temp;
             temp.model_matrix = node.model_matrix;
+            temp.is_toon_character = node.is_toon_character;
             if (node.enable_vertex_blending)
             {
                 temp.joint_matrices = node.joint_matrices;
@@ -2382,6 +2384,8 @@ namespace Piccolo
                             perdrawcall_storage_buffer_object.mesh_instances[i].enable_vertex_blending =
                                 mesh_nodes[drawcall_max_instance_count * drawcall_index + i].joint_matrices ? 1.0 :
                                                                                                               -1.0;
+                            perdrawcall_storage_buffer_object.mesh_instances[i].toon_shading_enabled =
+                                mesh_nodes[drawcall_max_instance_count * drawcall_index + i].is_toon_character ? 1.0f : 0.0f;
                         }
 
                         // per drawcall vertex blending storage buffer
@@ -2708,6 +2712,7 @@ namespace Piccolo
             const Matrix4x4* model_matrix {nullptr};
             const Matrix4x4* joint_matrices {nullptr};
             uint32_t         joint_count {0};
+            bool             is_toon_character {false};
         };
 
         std::map<VulkanPBRMaterial*, std::map<VulkanMesh*, std::vector<MeshNode>>> main_camera_mesh_drawcall_batch;
@@ -2720,6 +2725,7 @@ namespace Piccolo
 
             MeshNode temp;
             temp.model_matrix = node.model_matrix;
+            temp.is_toon_character = node.is_toon_character;
             if (node.enable_vertex_blending)
             {
                 temp.joint_matrices = node.joint_matrices;
@@ -2845,6 +2851,8 @@ namespace Piccolo
                             perdrawcall_storage_buffer_object.mesh_instances[i].enable_vertex_blending =
                                 mesh_nodes[drawcall_max_instance_count * drawcall_index + i].joint_matrices ? 1.0 :
                                                                                                               -1.0;
+                            perdrawcall_storage_buffer_object.mesh_instances[i].toon_shading_enabled =
+                                mesh_nodes[drawcall_max_instance_count * drawcall_index + i].is_toon_character ? 1.0f : 0.0f;
                         }
 
                         // per drawcall vertex blending storage buffer

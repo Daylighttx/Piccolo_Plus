@@ -92,6 +92,10 @@ void main()
     {
 #include "mesh_lighting.inl"
     }
+    else if (SHADINGMODELID_TOON_LIT == gbuffer.shadingModelID)
+    {
+#include "toon_lighting.inl"
+    }
 
     out_color = vec4(result_color, 1.0f);
 }

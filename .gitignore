@@ -356,6 +356,7 @@ node_modules/
 docs/render-learning/.vitepress/cache/
 docs/render-learning/.vitepress/dist/
 docs/render-learning/evidence/A05/*.rdc
+docs/render-learning/evidence/A06/*.rdc
 
 # Visual Studio 6 build log
 *.plg

@@ -28,6 +28,7 @@ layout(location = 0) in highp vec3 in_world_position;
 layout(location = 1) in highp vec3 in_normal;
 layout(location = 2) in highp vec3 in_tangent;
 layout(location = 3) in highp vec2 in_texcoord;
+layout(location = 4) flat in highp uint in_shading_model_id;
 
 // output screen color to location 0
 layout(location = 0) out highp vec4 out_gbuffer_a;
@@ -61,7 +62,7 @@ void main()
     gbuffer.metallic       = texture(metallic_roughness_texture_sampler, in_texcoord).z * metallicFactor;
     gbuffer.specular       = 0.5;
     gbuffer.roughness      = texture(metallic_roughness_texture_sampler, in_texcoord).y * roughnessFactor;
-    gbuffer.shadingModelID = SHADINGMODELID_DEFAULT_LIT;
+    gbuffer.shadingModelID = in_shading_model_id;
 
     highp vec3 Le = texture(emissive_color_texture_sampler, in_texcoord).xyz * emissiveFactor;
 
